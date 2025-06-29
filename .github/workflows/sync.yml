@@ -1,0 +1,109 @@
+name: アイカツアカデミー！スケジュール同期
+
+on:
+  # 定期実行 - 毎日0時、3時、6時、9時、12時、14時（UTC）に実行
+  # JST: 9時、12時、15時、18時、21時、23時
+  schedule:
+    - cron: '0 0,3,6,9,12,14 * * *'
+  
+  # 手動実行
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: '強制同期を実行（通常の同期処理を実行）'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  sync-schedule:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: リポジトリをチェックアウト
+      uses: actions/checkout@v4
+    
+    - name: Python環境をセットアップ
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: 依存関係をインストール
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+    
+    - name: Google認証情報を設定
+      env:
+        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        GOOGLE_TOKEN: ${{ secrets.GOOGLE_TOKEN }}
+      run: |
+        echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
+        echo '${{ secrets.GOOGLE_TOKEN }}' > token.json
+    
+    - name: 設定ファイルを作成
+      env:
+        CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
+      run: |
+        cat > config.ini << EOF
+        [DEFAULT]
+        target_url = https://aikatsu-academy.com/schedule/
+        
+        [GoogleCalendar]
+        calendar_id = ${{ secrets.CALENDAR_ID }}
+        credentials_file = ../credentials.json
+        token_file = ../token.json
+        
+        [Sync]
+        update_interval_hours = 6
+        
+        # カテゴリ → 絵文字マッピング（基本）
+        [CategoryEmojis]
+        short動画 = 📱
+        カード = 🎴
+        グッズ = 🧸
+        スペシャル = ✨
+        メンバーシップ = 👑
+
+        # 人物 → 絵文字マッピング（pタグの内容から判定）
+        [PersonEmojis]
+        みえる個人配信 = 🩷
+        みえる個人ch = 🩷
+        メエ個人配信 = 💙
+        メエ個人ch = 💙
+        パリン個人配信 = 💛
+        パリン個人ch = 💛
+        たいむ個人配信 = 💜
+        たいむ個人ch = 💜
+
+
+        # 特別キーワード → 絵文字マッピング（最優先）
+        [SpecialKeywords]
+        デミカツ通信 = 📰
+        アイカツ！チャレンジ = 💪
+        アイカツ！ミッション = 🔥
+        アイカツ！ツアーズ = 🗺️
+        アイカツアカデミー！配信部 = 🏫
+        EOF
+    
+    - name: スケジュール同期を実行
+      run: |
+        cd src
+        python main.py --manual --config ../config.ini
+    
+    - name: 実行結果をSlackに通知（オプション）
+      if: always()
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          message="✅ アイカツアカデミー！スケジュール同期が成功しました"
+        else
+          message="❌ アイカツアカデミー！スケジュール同期が失敗しました"
+        fi
+        
+        if [ -n "$SLACK_WEBHOOK_URL" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"$message\"}" \
+            $SLACK_WEBHOOK_URL
+        fi 

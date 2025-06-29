@@ -1,0 +1,38 @@
+[DEFAULT]
+target_url = https://aikatsu-academy.com/schedule/
+
+[GoogleCalendar]
+calendar_id = your_calendar_id@group.calendar.google.com
+credentials_file = credentials.json
+token_file = token.json
+
+[Sync]
+update_interval_hours = 6
+
+# カテゴリ → 絵文字マッピング（基本）
+[CategoryEmojis]
+short動画 = 📱
+カード = 🎴
+グッズ = 🧸
+スペシャル = ✨
+メンバーシップ = 👑
+
+# 人物 → 絵文字マッピング（pタグの内容から判定）
+[PersonEmojis]
+みえる個人配信 = 🩷
+みえる個人ch = 🩷
+メエ個人配信 = 💙
+メエ個人ch = 💙
+パリン個人配信 = 💛
+パリン個人ch = 💛
+たいむ個人配信 = 💜
+たいむ個人ch = 💜
+
+
+# 特別キーワード → 絵文字マッピング（最優先）
+[SpecialKeywords]
+デミカツ通信 = 📰
+アイカツ！チャレンジ = 💪
+アイカツ！ミッション = 🔥
+アイカツ！ツアーズ = 🗺️
+アイカツアカデミー！配信部 = 🏫 

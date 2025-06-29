@@ -1,0 +1,370 @@
+"""
+アイカツアカデミー！スケジュール同期ツール - メイン処理
+
+アイカツアカデミー！公式サイトからスケジュール情報を取得し、
+Googleカレンダーに自動同期するツールのメイン処理です。
+
+機能:
+- 公式サイトからのスケジュール自動取得
+- Googleカレンダーへの同期
+- 絵文字による視覚的分類
+- 手動実行・自動実行の両対応
+"""
+
+import sys
+import os
+import argparse
+import configparser
+import schedule
+import time
+import logging
+from datetime import datetime, timedelta
+from typing import List, Dict, Any
+
+# プロジェクト内モジュールをインポート
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from scraper import ScheduleScraper
+from gcal import GoogleCalendarManager
+
+# ログ設定
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+class AikatsuScheduleSync:
+    """
+    アイカツアカデミー！スケジュール同期処理の統合管理クラス
+    
+    公式サイトからスケジュールを取得し、Googleカレンダーに同期する
+    メイン処理を統合管理します。
+    """
+    
+    def __init__(self, config_path: str = "config.ini"):
+        """
+        初期化処理
+        
+        Args:
+            config_path: 設定ファイルのパス
+        """
+        self.config_path = config_path
+        self.config = configparser.ConfigParser()
+        self.config.read(config_path, encoding='utf-8')
+        
+        # 各モジュールの初期化
+        self.scraper = ScheduleScraper(config_path)
+        self.gcal_manager = GoogleCalendarManager(config_path)
+        
+        # 設定値の読み込み
+        self.update_interval_hours = self.config.getint('Sync', 'UPDATE_INTERVAL_HOURS', 
+                                                       fallback=6)
+        
+        # 古い絵文字設定は不要（scraper.pyで処理済み）
+    
+    def sync_schedule(self) -> bool:
+        """
+        スケジュール同期の実行
+        
+        Returns:
+            bool: 同期成功時True, 失敗時False
+        """
+        try:
+            logger.info("=== スケジュール同期開始 ===")
+            
+            # 0. 設定値の検証
+            if not self._validate_config():
+                logger.error("設定値の検証に失敗しました")
+                return False
+            
+            # 1. Google Calendar API認証
+            logger.info("Google Calendar API認証中...")
+            if not self.gcal_manager.authenticate():
+                logger.error("Google Calendar API認証に失敗しました")
+                return False
+            
+            # 2. スケジュール取得
+            logger.info("公式サイトからスケジュール取得中...")
+            schedule_data = self.scraper.fetch_schedule()
+            if not schedule_data:
+                logger.warning("取得できるスケジュールがありません")
+                return True  # エラーではないので成功とする
+            
+            # 3. 同期期間の設定（十分な範囲をカバーして不正データを削除）
+            now = datetime.now()
+            start_date = datetime(now.year, now.month, 1)
+            
+            # 取得したスケジュールデータの最大日付を確認
+            if schedule_data:
+                max_year = max(item['year'] for item in schedule_data)
+                max_month = max(item['month'] for item in schedule_data if item['year'] == max_year)
+                
+                # データ取得範囲の末日
+                if max_month == 12:
+                    data_end_date = datetime(max_year + 1, 1, 1) - timedelta(days=1)
+                else:
+                    data_end_date = datetime(max_year, max_month + 1, 1) - timedelta(days=1)
+                
+                # 安全のため、データ範囲から3ヶ月先まで削除範囲を拡張
+                # （過去のバグで登録された不正データを確実に削除するため）
+                extended_year = max_year
+                extended_month = max_month + 3
+                
+                # 年の繰り上がりを処理
+                while extended_month > 12:
+                    extended_month -= 12
+                    extended_year += 1
+                
+                if extended_month == 12:
+                    end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
+                else:
+                    end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
+                
+                logger.info(f"取得データ範囲: {start_date.date()} ～ {data_end_date.date()}")
+                logger.info(f"削除対象期間: {start_date.date()} ～ {end_date.date()} （安全マージン含む）")
+            else:
+                # フォールバック: 来月末日から3ヶ月先まで
+                if now.month == 12:
+                    next_month_year = now.year + 1
+                    next_month = 1
+                else:
+                    next_month_year = now.year
+                    next_month = now.month + 1
+                
+                # 3ヶ月先まで拡張
+                extended_year = next_month_year
+                extended_month = next_month + 2  # 来月+2ヶ月 = 3ヶ月先
+                
+                while extended_month > 12:
+                    extended_month -= 12
+                    extended_year += 1
+                
+                if extended_month == 12:
+                    end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
+                else:
+                    end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
+                
+                logger.warning(f"取得データなし、フォールバック期間: {start_date.date()} ～ {end_date.date()}")
+            
+            # 4. 既存予定削除（タイトル整形はscraper.pyで実施済み）
+            logger.info(f"既存予定削除中: {start_date.date()} ～ {end_date.date()}")
+            if not self.gcal_manager.clear_events(start_date, end_date):
+                logger.error("既存予定の削除に失敗しました")
+                return False
+            
+            # 5. 新規予定登録
+            logger.info(f"新規予定登録中: {len(schedule_data)}件")
+            if not self.gcal_manager.create_events(schedule_data):
+                logger.error("新規予定の登録に失敗しました")
+                return False
+            
+            logger.info("=== スケジュール同期完了 ===")
+            return True
+            
+        except Exception as e:
+            logger.error(f"スケジュール同期エラー: {e}")
+            return False
+    
+
+    
+    def _validate_config(self) -> bool:
+        """
+        設定値の検証
+        
+        サンプル値や無効な設定値をチェック
+        
+        Returns:
+            bool: 設定値が有効な場合True, 無効な場合False
+        """
+        try:
+            # カレンダーIDの検証
+            calendar_id = self.config.get('GoogleCalendar', 'CALENDAR_ID')
+            
+            # サンプル値の検出
+            if calendar_id in ['your_calendar_id@group.calendar.google.com', '']:
+                logger.error("❌ カレンダーIDがサンプル値のままです")
+                logger.error("📝 config.iniを編集して正しいカレンダーIDを設定してください")
+                logger.error("🔧 取得方法: https://support.google.com/calendar/answer/37103")
+                return False
+            
+            # カレンダーIDの形式チェック
+            if '@' not in calendar_id:
+                logger.error("❌ カレンダーIDの形式が正しくありません")
+                logger.error(f"📝 現在の設定: {calendar_id}")
+                logger.error("💡 正しい形式: xxxxx@group.calendar.google.com")
+                return False
+            
+            # 認証ファイルの存在チェック
+            credentials_file = self.config.get('GoogleCalendar', 'CREDENTIALS_FILE', fallback='credentials.json')
+            if not os.path.exists(credentials_file):
+                logger.error(f"❌ 認証ファイルが見つかりません: {credentials_file}")
+                logger.error("📝 Google Cloud Consoleからcredentials.jsonをダウンロードしてください")
+                return False
+            
+            logger.debug("✅ 設定値の検証完了")
+            return True
+            
+        except Exception as e:
+            logger.error(f"設定値検証エラー: {e}")
+            return False
+    
+    def run_manual(self) -> bool:
+        """
+        手動実行モード
+        
+        一度だけスケジュール同期を実行して終了
+        
+        Returns:
+            bool: 実行成功時True, 失敗時False
+        """
+        logger.info("手動実行モードで開始")
+        result = self.sync_schedule()
+        
+        if result:
+            logger.info("手動実行完了")
+        else:
+            logger.error("手動実行失敗")
+        
+        return result
+    
+    def run_automatic(self) -> None:
+        """
+        自動実行モード
+        
+        設計参照: 基本設計書.md 3.4章 自動実行制御
+        
+        実行仕様:
+        - UPDATE_INTERVAL_HOURS間隔での定期実行
+        - プロセス常駐型（schedule.run_continuously）
+        - エラー時も実行継続（個別処理での例外キャッチ）
+        """
+        logger.info(f"自動実行モードで開始（{self.update_interval_hours}時間間隔）")
+        
+        # スケジュール設定
+        schedule.every(self.update_interval_hours).hours.do(self._scheduled_sync)
+        
+        # 初回実行
+        logger.info("初回同期を実行")
+        self._scheduled_sync()
+        
+        # 定期実行ループ
+        logger.info("定期実行開始...")
+        try:
+            while True:
+                schedule.run_pending()
+                time.sleep(60)  # 1分間隔でチェック
+        except KeyboardInterrupt:
+            logger.info("ユーザーによる中断")
+        except Exception as e:
+            logger.error(f"自動実行エラー: {e}")
+    
+    def _scheduled_sync(self) -> None:
+        """
+        スケジュール実行用のラッパー関数
+        
+        エラーが発生しても次回実行に影響しないよう例外をキャッチ
+        """
+        try:
+            self.sync_schedule()
+        except Exception as e:
+            logger.error(f"定期実行中にエラーが発生: {e}")
+
+
+def create_sample_config() -> None:
+    """
+    テンプレートから設定ファイルを作成
+    
+    config.ini.templateをコピーしてconfig.iniを生成
+    """
+    import shutil
+    
+    template_path = 'config.ini.template'
+    config_path = 'config.ini'
+    
+    # テンプレートファイルの存在確認
+    if not os.path.exists(template_path):
+        logger.error(f"❌ テンプレートファイルが見つかりません: {template_path}")
+        print("エラー: config.ini.template が見つかりません")
+        return
+    
+    # 既存ファイルの確認
+    if os.path.exists(config_path):
+        print(f"⚠️  設定ファイル '{config_path}' は既に存在します")
+        response = input("上書きしますか？ [y/N]: ").strip().lower()
+        if response not in ['y', 'yes']:
+            print("キャンセルしました")
+            return
+    
+    try:
+        # テンプレートをコピー
+        shutil.copy2(template_path, config_path)
+        print(f"✅ 設定ファイル '{config_path}' を作成しました")
+        print("📝 以下の設定を編集してください:")
+        print("   - [GoogleCalendar] calendar_id: 実際のGoogleカレンダーID")
+        print("   - その他の設定も必要に応じて調整")
+        print("🔧 カレンダーID取得方法: https://support.google.com/calendar/answer/37103")
+        
+    except Exception as e:
+        logger.error(f"設定ファイル作成エラー: {e}")
+        print(f"エラー: 設定ファイルの作成に失敗しました - {e}")
+
+
+def main():
+    """
+    メイン関数 - コマンドライン引数処理と実行制御
+    
+    設計参照: 基本設計書.md 3.4章 実行制御
+    """
+    parser = argparse.ArgumentParser(
+        description='アイカツアカデミー！スケジュール同期ツール',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用例:
+  python main.py --manual           手動実行（一度だけ同期）
+  python main.py --auto             自動実行（定期同期）
+  python main.py --create-config    サンプル設定ファイル作成
+        """
+    )
+    
+    parser.add_argument('--manual', action='store_true',
+                       help='手動実行モード（一度だけ同期を実行）')
+    parser.add_argument('--auto', action='store_true',
+                       help='自動実行モード（定期的に同期を実行）')
+    parser.add_argument('--create-config', action='store_true',
+                       help='サンプル設定ファイルを作成')
+    parser.add_argument('--config', default='config.ini',
+                       help='設定ファイルのパス（デフォルト: config.ini）')
+    
+    args = parser.parse_args()
+    
+    # サンプル設定ファイル作成
+    if args.create_config:
+        create_sample_config()
+        return
+    
+    # 設定ファイルの存在確認
+    if not os.path.exists(args.config):
+        print(f"エラー: 設定ファイル '{args.config}' が見つかりません")
+        print("--create-config オプションでサンプルファイルを作成できます")
+        sys.exit(1)
+    
+    # アプリケーション初期化
+    app = AikatsuScheduleSync(args.config)
+    
+    # 実行モード判定
+    if args.manual:
+        # 手動実行
+        success = app.run_manual()
+        sys.exit(0 if success else 1)
+    elif args.auto:
+        # 自動実行
+        app.run_automatic()
+    else:
+        # 引数なしの場合はヘルプ表示
+        parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main() 

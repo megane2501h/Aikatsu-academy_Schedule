@@ -1,0 +1,77 @@
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "aikatsu-academy-schedule"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    "beautifulsoup4",
+    "google-api-python-client",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "python-dotenv",
+    "requests",
+    "schedule",
+]
+
+[package.metadata]
+requires-dist = [
+    "beautifulsoup4>=4.12.0",
+    "google-api-python-client>=2.90.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "schedule>=1.2.0",
+]
+
+[[package]]
+name = "beautifulsoup4"
+version = "4.12.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    "soupsieve",
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/ca/824b1195773ce6166d388573fc106ce56d4a805bd7427b624e063596ec58/beautifulsoup4-4.12.3-py3-none-any.whl", hash = "sha256:b80878c9f40111313e55da8ba20bdba06d8fa3969fc68304167741bbf9e082ed", size = 147925 },
+]
+
+[[package]]
+name = "google-api-python-client"
+version = "2.90.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    "google-auth",
+    "google-auth-httplib2",
+    "httplib2",
+    "uritemplate",
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/91/72d2b6dd7d6e8dd32c5b01e7e7c5da87e78ade86725afb1fb821b57e84fc5/google_api_python_client-2.90.0-py3-none-any.whl", hash = "sha256:ff5eafb1c7c8e9f71c5b5adc3b193f4932845bcc6f5f98c969c3c5b10fc6a2c5", size = 11935145 },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    "certifi",
+    "charset-normalizer",
+    "idna",
+    "urllib3",
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/8e/0e2d847013cb52cd35b38c009bb167a1a26b2ce6cd6965bf26b47bc0bf44e/requests-2.31.0-py3-none-any.whl", hash = "sha256:58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f", size = 62574 },
+]
+
+[[package]]
+name = "schedule"
+version = "1.2.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ac/2a/2deb82d39cbcfcabe145b9fec92e98b14b0ca13c2e95b2b3a6ca7fb02e6e4/schedule-1.2.2-py3-none-any.whl", hash = "sha256:15fe9c75fe5fd9b9627f3f19cc0ef1420508f9c9be8bdc59756b5a4b785a12ef", size = 11853 },
+]
+
+# 注意: これは簡略化されたuv.lockファイルです
+# 実際の使用時には 'uv lock' コマンドで完全なロックファイルを生成してください 
