@@ -235,6 +235,15 @@ class GoogleCalendarManager:
         try:
             logger.info(f"予定作成開始: {len(events_data)}件")
             
+            # 25日のイベントをデバッグログで確認
+            day_25_events = [event for event in events_data if event['day'] == 25]
+            if day_25_events:
+                logger.info(f"🔍 25日のイベント検出: {len(day_25_events)}件")
+                for i, event in enumerate(day_25_events):
+                    logger.info(f"   {i+1}. {event['title']} ({event['hour']}:{event['minute']:02d})")
+            else:
+                logger.warning("⚠️ 25日のイベントが見つかりません")
+            
             created_count = 0
             failed_count = 0
             failed_events = []
@@ -242,12 +251,19 @@ class GoogleCalendarManager:
             def create_callback(request_id, response, exception):
                 nonlocal created_count, failed_count
                 if exception is not None:
-                    logger.warning(f"予定作成エラー (ID: {request_id}): {exception}")
+                    logger.warning(f"❌ 予定作成エラー (ID: {request_id}): {exception}")
                     failed_count += 1
                     failed_events.append(request_id)
+                    # 25日のイベントエラーの場合は特に目立つログを出力
+                    if "25" in str(request_id):
+                        logger.error(f"🚨 25日のイベント作成エラー: {request_id}")
                 else:
                     created_count += 1
-                    logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
+                    # 25日のイベント成功の場合は特に目立つログを出力
+                    if "25" in str(request_id):
+                        logger.info(f"✅ 25日のイベント作成成功: {request_id} (ID: {response.get('id')})")
+                    else:
+                        logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
             
             # Google Calendar APIの制限：1000件/バッチ
             max_batch_size = 1000
@@ -331,8 +347,9 @@ class GoogleCalendarManager:
                         failed_count += 1
                         continue
                 
+                logger.info(f"🚀 バッチリクエスト実行開始: {total_events}件")
                 batch.execute()
-                logger.info(f"一括登録完了: {total_events}件")
+                logger.info(f"✅ 一括登録完了: {total_events}件")
             else:
                 # 1000件を超える場合のみ分割処理
                 logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
@@ -355,8 +372,9 @@ class GoogleCalendarManager:
                             failed_count += 1
                             continue
                     
+                    logger.info(f"🚀 分割バッチリクエスト実行: {len(batch_events)}件")
                     batch.execute()
-                    logger.info(f"分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
+                    logger.info(f"✅ 分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
             
             logger.info(f"予定作成完了: {created_count}件成功, {failed_count}件失敗")
             
