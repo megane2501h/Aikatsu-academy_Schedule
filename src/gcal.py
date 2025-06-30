@@ -255,12 +255,12 @@ class GoogleCalendarManager:
                     failed_count += 1
                     failed_events.append(request_id)
                     # 25日のイベントエラーの場合は特に目立つログを出力
-                    if "25" in str(request_id):
+                    if "-25_" in str(request_id):
                         logger.error(f"🚨 25日のイベント作成エラー: {request_id}")
                 else:
                     created_count += 1
                     # 25日のイベント成功の場合は特に目立つログを出力
-                    if "25" in str(request_id):
+                    if "-25_" in str(request_id):
                         logger.info(f"✅ 25日のイベント作成成功: {request_id} (ID: {response.get('id')})")
                     else:
                         logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
@@ -335,12 +335,14 @@ class GoogleCalendarManager:
                 for event_data in events_data:
                     try:
                         event = create_event_object(event_data)
+                        # 一意なrequest_idを生成（日付+時刻+タイトル）
+                        unique_id = f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}"
                         batch.add(
                             self.service.events().insert(
                                 calendarId=self.calendar_id,
                                 body=event
                             ),
-                            request_id=event_data['title']
+                            request_id=unique_id
                         )
                     except Exception as e:
                         logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
@@ -360,12 +362,14 @@ class GoogleCalendarManager:
                     for event_data in batch_events:
                         try:
                             event = create_event_object(event_data)
+                            # 一意なrequest_idを生成（日付+時刻+タイトル）
+                            unique_id = f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}"
                             batch.add(
                                 self.service.events().insert(
                                     calendarId=self.calendar_id,
                                     body=event
                                 ),
-                                request_id=event_data['title']
+                                request_id=unique_id
                             )
                         except Exception as e:
                             logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
