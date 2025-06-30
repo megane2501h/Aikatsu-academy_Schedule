@@ -331,9 +331,8 @@ class GoogleCalendarManager:
                         failed_count += 1
                         continue
                 
-                if batch._requests:
-                    batch.execute()
-                    logger.info(f"一括登録完了: {total_events}件")
+                batch.execute()
+                logger.info(f"一括登録完了: {total_events}件")
             else:
                 # 1000件を超える場合のみ分割処理
                 logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
@@ -356,9 +355,8 @@ class GoogleCalendarManager:
                             failed_count += 1
                             continue
                     
-                    if batch._requests:
-                        batch.execute()
-                        logger.info(f"分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
+                    batch.execute()
+                    logger.info(f"分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
             
             logger.info(f"予定作成完了: {created_count}件成功, {failed_count}件失敗")
             
