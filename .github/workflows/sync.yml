@@ -22,6 +22,8 @@ jobs:
     steps:
     - name: リポジトリをチェックアウト
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
     
     - name: Python環境をセットアップ
       uses: actions/setup-python@v5

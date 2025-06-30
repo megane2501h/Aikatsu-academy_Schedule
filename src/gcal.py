@@ -22,7 +22,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import BatchHttpRequest
+# BatchHttpRequestは self.service.new_batch_http_request() で作成
 
 # ログ設定
 logging.basicConfig(level=logging.INFO)
@@ -155,7 +155,7 @@ class GoogleCalendarManager:
             # 1000件以下の場合は一括処理、それ以上の場合は分割処理
             if total_events <= max_batch_size:
                 # 一括削除（通常のケース）
-                batch = BatchHttpRequest(callback=delete_callback)
+                batch = self.service.new_batch_http_request(callback=delete_callback)
                 for event in events:
                     batch.add(
                         self.service.events().delete(
@@ -171,7 +171,7 @@ class GoogleCalendarManager:
                 logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
                 for i in range(0, total_events, max_batch_size):
                     batch_events = events[i:i + max_batch_size]
-                    batch = BatchHttpRequest(callback=delete_callback)
+                    batch = self.service.new_batch_http_request(callback=delete_callback)
                     
                     for event in batch_events:
                         batch.add(
@@ -314,7 +314,7 @@ class GoogleCalendarManager:
             # 1000件以下の場合は一括処理、それ以上の場合は分割処理
             if total_events <= max_batch_size:
                 # 一括登録（通常のケース）
-                batch = BatchHttpRequest(callback=create_callback)
+                batch = self.service.new_batch_http_request(callback=create_callback)
                 
                 for event_data in events_data:
                     try:
@@ -339,7 +339,7 @@ class GoogleCalendarManager:
                 logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
                 for i in range(0, total_events, max_batch_size):
                     batch_events = events_data[i:i + max_batch_size]
-                    batch = BatchHttpRequest(callback=create_callback)
+                    batch = self.service.new_batch_http_request(callback=create_callback)
                     
                     for event_data in batch_events:
                         try:
