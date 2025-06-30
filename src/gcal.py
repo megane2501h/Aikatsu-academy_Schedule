@@ -208,15 +208,7 @@ class GoogleCalendarManager:
     
     def create_events(self, events_data: List[Dict[str, Any]]) -> bool:
         """
-        スケジュールデータからGoogleカレンダー予定を一括作成（バッチ処理対応）
-        
-        設計参照: 基本設計書.md 3.3章 create_events()仕様
-        
-        予定作成仕様:
-        - 開始時刻: スケジュールデータの時刻
-        - 終了時刻: 開始時刻+1時間（固定）
-        - タイトル: 絵文字付きタイトル（main.pyで処理済み）
-        - 公開設定: URLを知る人は閲覧可能
+        スケジュールデータからGoogleカレンダー予定を一括作成
         
         Args:
             events_data: scraper.pyから取得したスケジュールデータ
@@ -235,15 +227,6 @@ class GoogleCalendarManager:
         try:
             logger.info(f"予定作成開始: {len(events_data)}件")
             
-            # 25日のイベントをデバッグログで確認
-            day_25_events = [event for event in events_data if event['day'] == 25]
-            if day_25_events:
-                logger.info(f"🔍 25日のイベント検出: {len(day_25_events)}件")
-                for i, event in enumerate(day_25_events):
-                    logger.info(f"   {i+1}. {event['title']} ({event['hour']}:{event['minute']:02d})")
-            else:
-                logger.warning("⚠️ 25日のイベントが見つかりません")
-            
             created_count = 0
             failed_count = 0
             failed_events = []
@@ -251,134 +234,22 @@ class GoogleCalendarManager:
             def create_callback(request_id, response, exception):
                 nonlocal created_count, failed_count
                 if exception is not None:
-                    logger.warning(f"❌ 予定作成エラー (ID: {request_id}): {exception}")
+                    logger.warning(f"予定作成エラー (ID: {request_id}): {exception}")
                     failed_count += 1
                     failed_events.append(request_id)
-                    # 25日のイベントエラーの場合は特に目立つログを出力
-                    if "-25_" in str(request_id):
-                        logger.error(f"🚨 25日のイベント作成エラー: {request_id}")
                 else:
                     created_count += 1
-                    # 25日のイベント成功の場合は特に目立つログを出力
-                    if "-25_" in str(request_id):
-                        logger.info(f"✅ 25日のイベント作成成功: {request_id} (ID: {response.get('id')})")
-                    else:
-                        logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
+                    logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
             
             # Google Calendar APIの制限：1000件/バッチ
             max_batch_size = 1000
             total_events = len(events_data)
             
-            # 共通のイベント作成処理
-            def create_event_object(event_data):
-                # タイトルに絵文字を追加
-                title = event_data['title']
-                emoji = event_data.get('category', '')
-                if emoji and emoji not in title:
-                    title = f"{emoji} {title}"
-                
-                # 時刻が確定していないイベントを終日予定に変更
-                if not event_data.get('time_specified', True):
-                    # 終日予定として作成
-                    event_date = datetime(
-                        event_data['year'],
-                        event_data['month'],
-                        event_data['day']
-                    ).date()
-                    
-                    # 終日予定の終了日は翌日
-                    end_date = event_date + timedelta(days=1)
-                    
-                    return {
-                        'summary': title,
-                        'description': f"原文: {event_data.get('raw_text', '')}",
-                        'start': {
-                            'date': event_date.isoformat(),
-                        },
-                        'end': {
-                            'date': end_date.isoformat(),
-                        },
-                        'visibility': 'public',  # 公開設定
-                    }
-                else:
-                    # 時刻が指定されている予定として作成
-                    start_datetime = datetime(
-                        event_data['year'],
-                        event_data['month'],
-                        event_data['day'],
-                        event_data['hour'],
-                        event_data['minute']
-                    )
-                    
-                    # 終了時刻（開始時刻+1時間）
-                    end_datetime = start_datetime + timedelta(hours=1)
-                    
-                    return {
-                        'summary': title,
-                        'description': f"原文: {event_data.get('raw_text', '')}",
-                        'start': {
-                            'dateTime': start_datetime.isoformat(),
-                            'timeZone': 'Asia/Tokyo',
-                        },
-                        'end': {
-                            'dateTime': end_datetime.isoformat(),
-                            'timeZone': 'Asia/Tokyo',
-                        },
-                        'visibility': 'public',  # 公開設定
-                    }
-            
-            # 1000件以下の場合は一括処理、それ以上の場合は分割処理
+            # バッチ処理実行
             if total_events <= max_batch_size:
-                # 一括登録（通常のケース）
-                batch = self.service.new_batch_http_request(callback=create_callback)
-                
-                for event_data in events_data:
-                    try:
-                        event = create_event_object(event_data)
-                        # 一意なrequest_idを生成（日付+時刻+タイトル）
-                        unique_id = f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}"
-                        batch.add(
-                            self.service.events().insert(
-                                calendarId=self.calendar_id,
-                                body=event
-                            ),
-                            request_id=unique_id
-                        )
-                    except Exception as e:
-                        logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
-                        failed_count += 1
-                        continue
-                
-                logger.info(f"🚀 バッチリクエスト実行開始: {total_events}件")
-                batch.execute()
-                logger.info(f"✅ 一括登録完了: {total_events}件")
+                self._execute_single_batch(events_data, create_callback)
             else:
-                # 1000件を超える場合のみ分割処理
-                logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
-                for i in range(0, total_events, max_batch_size):
-                    batch_events = events_data[i:i + max_batch_size]
-                    batch = self.service.new_batch_http_request(callback=create_callback)
-                    
-                    for event_data in batch_events:
-                        try:
-                            event = create_event_object(event_data)
-                            # 一意なrequest_idを生成（日付+時刻+タイトル）
-                            unique_id = f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}"
-                            batch.add(
-                                self.service.events().insert(
-                                    calendarId=self.calendar_id,
-                                    body=event
-                                ),
-                                request_id=unique_id
-                            )
-                        except Exception as e:
-                            logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
-                            failed_count += 1
-                            continue
-                    
-                    logger.info(f"🚀 分割バッチリクエスト実行: {len(batch_events)}件")
-                    batch.execute()
-                    logger.info(f"✅ 分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
+                self._execute_multiple_batches(events_data, max_batch_size, create_callback)
             
             logger.info(f"予定作成完了: {created_count}件成功, {failed_count}件失敗")
             
@@ -386,12 +257,142 @@ class GoogleCalendarManager:
             if failed_events:
                 logger.warning(f"作成に失敗したイベント: {', '.join(failed_events[:5])}{'...' if len(failed_events) > 5 else ''}")
             
-            # 成功した件数が0より大きければ成功とする
             return created_count > 0
             
         except Exception as e:
             logger.error(f"予定作成エラー: {e}")
             return False
+    
+    def _generate_unique_request_id(self, event_data: Dict[str, Any]) -> str:
+        """
+        バッチリクエスト用の一意なIDを生成
+        
+        Args:
+            event_data: イベントデータ
+            
+        Returns:
+            str: 一意なrequest_id（日付+時刻+タイトル形式）
+        """
+        return f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}"
+    
+    def _create_event_object(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        イベントデータからGoogle Calendar用のイベントオブジェクトを作成
+        
+        Args:
+            event_data: スケジュールデータ
+            
+        Returns:
+            Dict: Google Calendar APIイベントオブジェクト
+        """
+        # タイトルに絵文字を追加
+        title = event_data['title']
+        emoji = event_data.get('category', '')
+        if emoji and emoji not in title:
+            title = f"{emoji} {title}"
+        
+        # 時刻が確定していないイベントを終日予定に変更
+        if not event_data.get('time_specified', True):
+            # 終日予定として作成
+            event_date = datetime(
+                event_data['year'],
+                event_data['month'],
+                event_data['day']
+            ).date()
+            
+            # 終日予定の終了日は翌日
+            end_date = event_date + timedelta(days=1)
+            
+            return {
+                'summary': title,
+                'description': f"原文: {event_data.get('raw_text', '')}",
+                'start': {
+                    'date': event_date.isoformat(),
+                },
+                'end': {
+                    'date': end_date.isoformat(),
+                },
+                'visibility': 'public',
+            }
+        else:
+            # 時刻が指定されている予定として作成
+            start_datetime = datetime(
+                event_data['year'],
+                event_data['month'],
+                event_data['day'],
+                event_data['hour'],
+                event_data['minute']
+            )
+            
+            # 終了時刻（開始時刻+1時間）
+            end_datetime = start_datetime + timedelta(hours=1)
+            
+            return {
+                'summary': title,
+                'description': f"原文: {event_data.get('raw_text', '')}",
+                'start': {
+                    'dateTime': start_datetime.isoformat(),
+                    'timeZone': 'Asia/Tokyo',
+                },
+                'end': {
+                    'dateTime': end_datetime.isoformat(),
+                    'timeZone': 'Asia/Tokyo',
+                },
+                'visibility': 'public',
+            }
+    
+    def _execute_single_batch(self, events_data: List[Dict[str, Any]], callback) -> None:
+        """
+        一括バッチ処理（1000件以下）
+        """
+        batch = self.service.new_batch_http_request(callback=callback)
+        
+        for event_data in events_data:
+            try:
+                event = self._create_event_object(event_data)
+                unique_id = self._generate_unique_request_id(event_data)
+                batch.add(
+                    self.service.events().insert(
+                        calendarId=self.calendar_id,
+                        body=event
+                    ),
+                    request_id=unique_id
+                )
+            except Exception as e:
+                logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
+                continue
+        
+        batch.execute()
+        logger.info(f"一括登録完了: {len(events_data)}件")
+    
+    def _execute_multiple_batches(self, events_data: List[Dict[str, Any]], max_batch_size: int, callback) -> None:
+        """
+        分割バッチ処理（1000件超過）
+        """
+        total_events = len(events_data)
+        logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
+        
+        for i in range(0, total_events, max_batch_size):
+            batch_events = events_data[i:i + max_batch_size]
+            batch = self.service.new_batch_http_request(callback=callback)
+            
+            for event_data in batch_events:
+                try:
+                    event = self._create_event_object(event_data)
+                    unique_id = self._generate_unique_request_id(event_data)
+                    batch.add(
+                        self.service.events().insert(
+                            calendarId=self.calendar_id,
+                            body=event
+                        ),
+                        request_id=unique_id
+                    )
+                except Exception as e:
+                    logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
+                    continue
+            
+            batch.execute()
+            logger.info(f"分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
     
     def get_calendar_info(self) -> Optional[Dict[str, Any]]:
         """
