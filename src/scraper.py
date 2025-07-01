@@ -269,10 +269,25 @@ class ScheduleScraper:
         title = description
         
         # 配信/動画の区別とタイトル整形
+        type_tag = ""
         if re.search(r'\[.*?個人配信\]', title):
-            title = re.sub(r'\[.*?個人配信\]', '[配信]', title)
+            type_tag = "[配信]"
+            title = re.sub(r'\[.*?個人配信\]', '', title)
         elif re.search(r'\[.*?個人ch\]', title):
-            title = re.sub(r'\[.*?個人ch\]', '[動画]', title)
+            type_tag = "[動画]"
+            title = re.sub(r'\[.*?個人ch\]', '', title)
+        elif title.startswith('[配信]'):
+            type_tag = "[配信]"
+            title = re.sub(r'^\[配信\]\s*', '', title)
+        elif title.startswith('[動画]'):
+            type_tag = "[動画]"
+            title = re.sub(r'^\[動画\]\s*', '', title)
+        elif title.startswith('[配信部]'):
+            type_tag = "[配信]"
+            title = re.sub(r'^\[配信部\]\s*', '', title)
+        
+        # 全角スペースやタブを削除して整形
+        title = title.strip()
         
         # 絵文字決定処理（優先順位: 特別キーワード > 複数絵文字組み合わせ > 人物 > カテゴリ）
         emoji = ""
@@ -342,6 +357,7 @@ class ScheduleScraper:
                 "minute": minute,
                 "title": title.strip(),
                 "category": emoji,
+                "type_tag": type_tag,
                 "raw_text": post_item.get_text().strip(),
                 "time_specified": time_specified  # 時刻が確定しているかのフラグ
             }

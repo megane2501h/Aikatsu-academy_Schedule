@@ -288,8 +288,13 @@ class GoogleCalendarManager:
         # タイトルに絵文字を追加
         title = event_data['title']
         emoji = event_data.get('category', '')
-        if emoji and emoji not in title:
-            title = f"{emoji} {title}"
+        type_tag = event_data.get('type_tag', '')
+        
+        # 新しいタイトル形式: 絵文字 + タイトル + [配信/動画]
+        if emoji:
+            title = f"{emoji}{title}"
+        if type_tag:
+            title = f"{title}{type_tag}"
         
         # 時刻が確定していないイベントを終日予定に変更
         if not event_data.get('time_specified', True):
