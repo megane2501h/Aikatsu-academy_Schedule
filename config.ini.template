@@ -35,4 +35,16 @@ short動画 = 📱
 アイカツ！チャレンジ = 💪
 アイカツ！ミッション = 🔥
 アイカツ！ツアーズ = 🗺️
-アイカツアカデミー！配信部 = 🏫 
+アイカツアカデミー！配信部 = 🏫
+
+# チャンネルURL → 配信者マッピング（Googleカレンダーの詳細にURLを追加）
+[ChannelURLs]
+みえる個人配信 = https://www.youtube.com/@example_mieru
+みえる個人ch = https://www.youtube.com/@example_mieru
+メエ個人配信 = https://www.youtube.com/@example_mee
+メエ個人ch = https://www.youtube.com/@example_mee
+パリン個人配信 = https://www.youtube.com/@example_parin
+パリン個人ch = https://www.youtube.com/@example_parin
+たいむ個人配信 = https://www.youtube.com/@example_taimu
+たいむ個人ch = https://www.youtube.com/@example_taimu
+アイカツアカデミー！配信部 = https://www.youtube.com/@example_academy 

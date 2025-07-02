@@ -67,6 +67,12 @@ class ScheduleScraper:
                          self.special_keywords = {k: v for k, v in self.config.items('SpecialKeywords') 
                                     if k not in self.config.defaults()}
         
+        # チャンネルURL → 配信者マッピング（DEFAULTセクションの値を除外）
+        self.channel_urls = {}
+        if self.config.has_section('ChannelURLs'):
+            self.channel_urls = {k: v for k, v in self.config.items('ChannelURLs') 
+                               if k not in self.config.defaults()}
+    
     def fetch_schedule(self) -> List[Dict[str, Any]]:
         """
         公式サイトからスケジュール情報を取得して構造化データに変換
@@ -367,6 +373,17 @@ class ScheduleScraper:
         if "祝日" in description:
             return None
         
+        # 6. チャンネルURL決定（raw_textから元の角括弧を抽出）
+        channel_url = ""
+        original_text = post_item.get_text().strip()
+        
+        # 角括弧内容を抽出してチャンネルURLを検索
+        bracket_matches = re.findall(r'\[([^\]]+)\]', original_text)
+        for bracket_content in bracket_matches:
+            if bracket_content in self.channel_urls:
+                channel_url = self.channel_urls[bracket_content]
+                break
+        
         if title.strip():  # タイトルが空でない場合のみ
             return {
                 "year": year,
@@ -378,7 +395,8 @@ class ScheduleScraper:
                 "category": emoji,
                 "type_tag": type_tag,
                 "raw_text": post_item.get_text().strip(),
-                "time_specified": time_specified  # 時刻が確定しているかのフラグ
+                "time_specified": time_specified,  # 時刻が確定しているかのフラグ
+                "channel_url": channel_url  # チャンネルURLを追加
             }
         
         return None

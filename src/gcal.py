@@ -308,9 +308,15 @@ class GoogleCalendarManager:
             # 終日予定の終了日は翌日
             end_date = event_date + timedelta(days=1)
             
+            # description作成（チャンネルURL含む）
+            description_parts = [f"原文: {event_data.get('raw_text', '')}"]
+            if event_data.get('channel_url'):
+                description_parts.append(f"チャンネル: {event_data['channel_url']}")
+            description = "\n".join(description_parts)
+            
             return {
                 'summary': title,
-                'description': f"原文: {event_data.get('raw_text', '')}",
+                'description': description,
                 'start': {
                     'date': event_date.isoformat(),
                 },
@@ -332,9 +338,15 @@ class GoogleCalendarManager:
             # 終了時刻（開始時刻+1時間）
             end_datetime = start_datetime + timedelta(hours=1)
             
+            # description作成（チャンネルURL含む）
+            description_parts = [f"原文: {event_data.get('raw_text', '')}"]
+            if event_data.get('channel_url'):
+                description_parts.append(f"チャンネル: {event_data['channel_url']}")
+            description = "\n".join(description_parts)
+            
             return {
                 'summary': title,
-                'description': f"原文: {event_data.get('raw_text', '')}",
+                'description': description,
                 'start': {
                     'dateTime': start_datetime.isoformat(),
                     'timeZone': 'Asia/Tokyo',
