@@ -88,16 +88,18 @@ jobs:
         アイカツアカデミー！配信部 = 🏫
         
         # チャンネルURL → 配信者マッピング（Googleカレンダーの詳細にURLを追加）
+        # スケジュール上の[]内に該当した場合、チャンネルURLを追加
         [ChannelURLs]
-        みえる個人配信 = https://www.youtube.com/@mieru_aikatsu
-        みえる個人ch = https://www.youtube.com/@mieru_aikatsu
-        メエ個人配信 = https://www.youtube.com/@mee_aikatsu
-        メエ個人ch = https://www.youtube.com/@mee_aikatsu
-        パリン個人配信 = https://www.youtube.com/@parin_aikatsu
-        パリン個人ch = https://www.youtube.com/@parin_aikatsu
-        たいむ個人配信 = https://www.youtube.com/@taimu_aikatsu
-        たいむ個人ch = https://www.youtube.com/@taimu_aikatsu
-        アイカツアカデミー！配信部 = https://www.youtube.com/@aikatsu_academy
+        みえる個人配信 = https://www.youtube.com/@himeno-mieru
+        みえる個人ch = https://www.youtube.com/@himeno-mieru
+        メエ個人配信 = https://www.youtube.com/@mamimu-meh
+        メエ個人ch = https://www.youtube.com/@mamimu-meh
+        パリン個人配信 = https://www.youtube.com/@wao-parin
+        パリン個人ch = https://www.youtube.com/@wao-parin
+        たいむ個人配信 = https://www.youtube.com/@rindou-taimu
+        たいむ個人ch = https://www.youtube.com/@rindou-taimu
+        アイカツアカデミー！配信部 = https://www.youtube.com/@aikatsu-academy
+        各個人チャンネル = みえる： https://www.youtube.com/@himeno-mieru メエ： https://www.youtube.com/@mamimu-meh パリン： https://www.youtube.com/@wao-parin たいむ： https://www.youtube.com/@rindou-taimu
         EOF
     
     - name: スケジュール同期を実行

@@ -384,6 +384,10 @@ class ScheduleScraper:
                 channel_url = self.channel_urls[bracket_content]
                 break
         
+        # フォールバック: 何も該当しない場合は公式サイトを追加
+        if not channel_url:
+            channel_url = "https://aikatsu-academy.com/ https://aikatsu-academy.com/schedule/"
+        
         if title.strip():  # タイトルが空でない場合のみ
             return {
                 "year": year,
