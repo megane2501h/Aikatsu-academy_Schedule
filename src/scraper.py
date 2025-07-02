@@ -265,26 +265,45 @@ class ScheduleScraper:
             hour, minute = 20, 0
             time_specified = True  # デミカツ通信は時刻確定扱い
         
-        # タイトル処理：[xxx個人配信]や[xxx個人ch]を[配信]や[動画]に変換し、タイトルから除去
+        # タイトル処理：すべての角括弧[]をタイトルから抽出して後ろに移動
         title = description
         
-        # 配信/動画の区別とタイトル整形
-        type_tag = ""
+        # すべての角括弧を抽出
+        bracket_contents = []
+        
+        # 1. 個人配信/個人chを配信/動画に変換
         if re.search(r'\[.*?個人配信\]', title):
-            type_tag = "[配信]"
+            bracket_contents.append("[配信]")
             title = re.sub(r'\[.*?個人配信\]', '', title)
         elif re.search(r'\[.*?個人ch\]', title):
-            type_tag = "[動画]"
+            bracket_contents.append("[動画]")
             title = re.sub(r'\[.*?個人ch\]', '', title)
-        elif title.startswith('[配信]'):
-            type_tag = "[配信]"
-            title = re.sub(r'^\[配信\]\s*', '', title)
-        elif title.startswith('[動画]'):
-            type_tag = "[動画]"
-            title = re.sub(r'^\[動画\]\s*', '', title)
-        elif title.startswith('[配信部]'):
-            type_tag = "[配信]"
-            title = re.sub(r'^\[配信部\]\s*', '', title)
+        
+        # 2. 配信部を配信に変換
+        if re.search(r'\[.*?配信部\]', title):
+            bracket_contents.append("[配信]")
+            title = re.sub(r'\[.*?配信部\]', '', title)
+        
+        # 3. 既存の[配信]や[動画]を抽出
+        existing_brackets = re.findall(r'\[(配信|動画)\]', title)
+        for bracket in existing_brackets:
+            bracket_contents.append(f"[{bracket}]")
+        title = re.sub(r'\[(配信|動画)\]', '', title)
+        
+        # 4. その他すべての角括弧を抽出
+        other_brackets = re.findall(r'\[[^\]]+\]', title)
+        bracket_contents.extend(other_brackets)
+        title = re.sub(r'\[[^\]]+\]', '', title)
+        
+        # 5. 重複削除と結合
+        unique_brackets = []
+        seen = set()
+        for bracket in bracket_contents:
+            if bracket not in seen:
+                unique_brackets.append(bracket)
+                seen.add(bracket)
+        
+        type_tag = ''.join(unique_brackets)
         
         # 全角スペースやタブを削除して整形
         title = title.strip()
