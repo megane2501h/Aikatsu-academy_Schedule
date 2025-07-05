@@ -8,12 +8,14 @@ Google Calendar APIを使用してスケジュール情報を
 - OAuth2.0認証
 - 既存予定の削除
 - 新規予定の一括登録
+- 差分更新による高速同期
 """
 
 import os
 import pickle
+import hashlib
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import configparser
 import logging
 
@@ -37,6 +39,7 @@ class GoogleCalendarManager:
     Googleカレンダー操作を管理するクラス
     
     Google Calendar APIを使用して認証・予定操作を行います。
+    差分更新により高速同期を実現します。
     """
     
     def __init__(self, config_path: str = "config.ini"):
@@ -56,6 +59,311 @@ class GoogleCalendarManager:
                                          fallback='token.json')
         self.service = None
     
+    def _calculate_event_hash(self, event_data: Dict[str, Any]) -> str:
+        """
+        予定データからハッシュ値を計算
+        
+        Args:
+            event_data: 予定データ
+            
+        Returns:
+            str: SHA256ハッシュ値
+        """
+        # ハッシュに含める要素を文字列として結合
+        hash_elements = [
+            str(event_data.get('year', '')),
+            str(event_data.get('month', '')),
+            str(event_data.get('day', '')),
+            str(event_data.get('hour', '')),
+            str(event_data.get('minute', '')),
+            str(event_data.get('title', '')),
+            str(event_data.get('category', '')),
+            str(event_data.get('type_tag', '')),
+            str(event_data.get('channel_url', '')),
+            str(event_data.get('time_specified', True))
+        ]
+        
+        # 文字列結合してハッシュ値計算
+        hash_input = '|'.join(hash_elements)
+        return hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
+    
+    def _extract_event_hash_from_description(self, description: str) -> Optional[str]:
+        """
+        予定の説明文からハッシュ値を抽出
+        
+        Args:
+            description: 予定の説明文
+            
+        Returns:
+            Optional[str]: ハッシュ値（存在しない場合はNone）
+        """
+        if not description:
+            return None
+        
+        # 説明文の最後行にハッシュ値を格納する形式
+        lines = description.split('\n')
+        for line in lines:
+            if line.startswith('Hash: '):
+                return line.replace('Hash: ', '').strip()
+        return None
+    
+    def _create_event_object_with_hash(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        イベントデータからGoogle Calendar用のイベントオブジェクトを作成（ハッシュ値付き）
+        
+        Args:
+            event_data: スケジュールデータ
+            
+        Returns:
+            Dict: Google Calendar APIイベントオブジェクト
+        """
+        # 既存のイベントオブジェクト作成
+        event = self._create_event_object(event_data)
+        
+        # ハッシュ値を計算して説明文に追加
+        event_hash = self._calculate_event_hash(event_data)
+        current_description = event.get('description', '')
+        
+        # ハッシュ値を説明文に追加
+        if current_description:
+            event['description'] = f"{current_description}\nHash: {event_hash}"
+        else:
+            event['description'] = f"Hash: {event_hash}"
+        
+        return event
+    
+    def sync_events_with_diff(self, events_data: List[Dict[str, Any]]) -> bool:
+        """
+        差分更新を使用したイベント同期
+        
+        Args:
+            events_data: 新しいスケジュールデータ
+            
+        Returns:
+            bool: 同期成功時True, 失敗時False
+        """
+        if not self.service:
+            logger.error("Google Calendar APIが初期化されていません")
+            return False
+        
+        try:
+            logger.info(f"差分同期開始: {len(events_data)}件の新規データ")
+            
+            # 1. 既存予定を取得
+            now = datetime.now()
+            start_date = datetime(now.year, now.month, 1)
+            
+            # 取得したスケジュールデータの最大日付を確認
+            if events_data:
+                max_year = max(item['year'] for item in events_data)
+                max_month = max(item['month'] for item in events_data if item['year'] == max_year)
+                
+                # 安全マージン3ヶ月
+                extended_year = max_year
+                extended_month = max_month + 3
+                
+                while extended_month > 12:
+                    extended_month -= 12
+                    extended_year += 1
+                
+                if extended_month == 12:
+                    end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
+                else:
+                    end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
+            else:
+                end_date = datetime(now.year, now.month + 3, 1) - timedelta(days=1)
+            
+            logger.info(f"既存予定取得: {start_date.date()} ～ {end_date.date()}")
+            
+            # 既存予定を取得
+            existing_events = self._get_existing_events(start_date, end_date)
+            existing_hashes = {
+                self._extract_event_hash_from_description(event.get('description', '')): event
+                for event in existing_events
+                if self._extract_event_hash_from_description(event.get('description', ''))
+            }
+            
+            logger.info(f"既存予定ハッシュ: {len(existing_hashes)}件")
+            
+            # 2. 新規データのハッシュ値を計算
+            new_hashes = {}
+            for event_data in events_data:
+                event_hash = self._calculate_event_hash(event_data)
+                new_hashes[event_hash] = event_data
+            
+            logger.info(f"新規データハッシュ: {len(new_hashes)}件")
+            
+            # 3. 差分を計算
+            # 削除対象: 既存にあるが新規にない
+            to_delete = []
+            for hash_val, event in existing_hashes.items():
+                if hash_val not in new_hashes:
+                    to_delete.append(event)
+            
+            # 作成対象: 新規にあるが既存にない
+            to_create = []
+            for hash_val, event_data in new_hashes.items():
+                if hash_val not in existing_hashes:
+                    to_create.append(event_data)
+            
+            # 変更なし: 両方にある
+            unchanged = len(existing_hashes) - len(to_delete)
+            
+            logger.info(f"差分分析完了 - 削除:{len(to_delete)}件, 作成:{len(to_create)}件, 変更なし:{unchanged}件")
+            
+            # 4. 差分更新実行
+            success = True
+            
+            # 削除処理
+            if to_delete:
+                logger.info(f"不要な予定を削除中: {len(to_delete)}件")
+                if not self._delete_events_by_id(to_delete):
+                    success = False
+            
+            # 作成処理
+            if to_create:
+                logger.info(f"新規予定を作成中: {len(to_create)}件")
+                if not self._create_events_with_hash(to_create):
+                    success = False
+            
+            # 変更がない場合
+            if not to_delete and not to_create:
+                logger.info("✨ 変更がありません - 同期処理をスキップしました")
+            
+            logger.info("差分同期完了")
+            return success
+            
+        except Exception as e:
+            logger.error(f"差分同期エラー: {e}")
+            return False
+    
+    def _get_existing_events(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """
+        指定期間の既存予定を取得
+        
+        Args:
+            start_date: 開始日時
+            end_date: 終了日時
+            
+        Returns:
+            List[Dict]: 既存予定のリスト
+        """
+        try:
+            events_result = self.service.events().list(
+                calendarId=self.calendar_id,
+                timeMin=start_date.isoformat() + 'Z',
+                timeMax=end_date.isoformat() + 'Z',
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            
+            return events_result.get('items', [])
+        except Exception as e:
+            logger.error(f"既存予定取得エラー: {e}")
+            return []
+    
+    def _delete_events_by_id(self, events: List[Dict[str, Any]]) -> bool:
+        """
+        指定された予定をIDで削除
+        
+        Args:
+            events: 削除対象の予定リスト
+            
+        Returns:
+            bool: 削除成功時True
+        """
+        try:
+            deleted_count = 0
+            failed_count = 0
+            
+            def delete_callback(request_id, response, exception):
+                nonlocal deleted_count, failed_count
+                if exception is not None:
+                    logger.warning(f"予定削除エラー (ID: {request_id}): {exception}")
+                    failed_count += 1
+                else:
+                    deleted_count += 1
+            
+            # バッチ処理で削除
+            max_batch_size = 1000
+            total_events = len(events)
+            
+            for i in range(0, total_events, max_batch_size):
+                batch_events = events[i:i + max_batch_size]
+                batch = self.service.new_batch_http_request(callback=delete_callback)
+                
+                for event in batch_events:
+                    batch.add(
+                        self.service.events().delete(
+                            calendarId=self.calendar_id,
+                            eventId=event['id']
+                        ),
+                        request_id=event['id']
+                    )
+                
+                batch.execute()
+            
+            logger.info(f"予定削除完了: {deleted_count}件成功, {failed_count}件失敗")
+            return deleted_count > 0 or total_events == 0
+            
+        except Exception as e:
+            logger.error(f"予定削除エラー: {e}")
+            return False
+    
+    def _create_events_with_hash(self, events_data: List[Dict[str, Any]]) -> bool:
+        """
+        ハッシュ値付きでイベントを作成
+        
+        Args:
+            events_data: 作成対象のスケジュールデータ
+            
+        Returns:
+            bool: 作成成功時True
+        """
+        try:
+            created_count = 0
+            failed_count = 0
+            
+            def create_callback(request_id, response, exception):
+                nonlocal created_count, failed_count
+                if exception is not None:
+                    logger.warning(f"予定作成エラー (ID: {request_id}): {exception}")
+                    failed_count += 1
+                else:
+                    created_count += 1
+            
+            # バッチ処理で作成
+            max_batch_size = 1000
+            total_events = len(events_data)
+            
+            for i in range(0, total_events, max_batch_size):
+                batch_events = events_data[i:i + max_batch_size]
+                batch = self.service.new_batch_http_request(callback=create_callback)
+                
+                for event_data in batch_events:
+                    try:
+                        event = self._create_event_object_with_hash(event_data)
+                        unique_id = self._generate_unique_request_id(event_data)
+                        batch.add(
+                            self.service.events().insert(
+                                calendarId=self.calendar_id,
+                                body=event
+                            ),
+                            request_id=unique_id
+                        )
+                    except Exception as e:
+                        logger.warning(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
+                        continue
+                
+                batch.execute()
+            
+            logger.info(f"予定作成完了: {created_count}件成功, {failed_count}件失敗")
+            return created_count > 0 or total_events == 0
+            
+        except Exception as e:
+            logger.error(f"予定作成エラー: {e}")
+            return False
+
     def authenticate(self) -> bool:
         """
         Google Calendar APIの認証を実行

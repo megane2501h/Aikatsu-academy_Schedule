@@ -155,17 +155,29 @@ class AikatsuScheduleSync:
                 
                 logger.warning(f"取得データなし、フォールバック期間: {start_date.date()} ～ {end_date.date()}")
             
-            # 4. 既存予定削除（タイトル整形はscraper.pyで実施済み）
-            logger.info(f"既存予定削除中: {start_date.date()} ～ {end_date.date()}")
-            if not self.gcal_manager.clear_events(start_date, end_date):
-                logger.error("既存予定の削除に失敗しました")
-                return False
+            # 4. 差分更新による高速同期
+            logger.info("差分更新による高速同期を開始...")
             
-            # 5. 新規予定登録
-            logger.info(f"新規予定登録中: {len(schedule_data)}件")
-            if not self.gcal_manager.create_events(schedule_data):
-                logger.error("新規予定の登録に失敗しました")
-                return False
+            # 差分更新を試行、失敗時はフォールバック処理
+            diff_success = self.gcal_manager.sync_events_with_diff(schedule_data)
+            
+            if not diff_success:
+                logger.warning("差分更新に失敗しました - フォールバック処理を実行します")
+                
+                # フォールバック: 従来の全削除・全作成処理
+                logger.info(f"既存予定削除中: {start_date.date()} ～ {end_date.date()}")
+                if not self.gcal_manager.clear_events(start_date, end_date):
+                    logger.error("既存予定の削除に失敗しました")
+                    return False
+                
+                logger.info(f"新規予定登録中: {len(schedule_data)}件")
+                if not self.gcal_manager.create_events(schedule_data):
+                    logger.error("新規予定の登録に失敗しました")
+                    return False
+                
+                logger.info("フォールバック処理完了")
+            else:
+                logger.info("差分更新による高速同期完了 ✨")
             
             logger.info("=== スケジュール同期完了 ===")
             return True
