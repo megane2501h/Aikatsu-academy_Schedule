@@ -33,7 +33,7 @@ jobs:
     - name: uvをセットアップ
       uses: astral-sh/setup-uv@v3
       with:
-        enable-cache: true
+        enable-cache: false
     
     - name: 依存関係をインストール（uvを使用）
       run: |

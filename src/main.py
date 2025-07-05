@@ -158,6 +158,12 @@ class AikatsuScheduleSync:
             # 4. 差分更新による高速同期
             logger.info("差分更新による高速同期を開始...")
             
+            # 🔧 重複バグ防止：初回実行時は強制削除
+            if os.getenv('GITHUB_ACTIONS') == 'true':
+                logger.info("🧹 GitHub Actions環境 - 重複防止のため事前削除を実行")
+                self.gcal_manager.clear_events(start_date, end_date)
+                logger.info("事前削除完了")
+            
             # 差分更新を試行、失敗時はフォールバック処理
             diff_success = self.gcal_manager.sync_events_with_diff(schedule_data)
             
