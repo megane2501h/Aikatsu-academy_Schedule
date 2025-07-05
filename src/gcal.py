@@ -14,6 +14,7 @@ Google Calendar APIを使用してスケジュール情報を
 import os
 import pickle
 import hashlib
+import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 import configparser
@@ -32,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 # Google Calendar APIのスコープ
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+
+# 定数定義
+SAFETY_MARGIN_MONTHS = 3  # 安全マージン月数
+BATCH_SIZE_LIMIT = 1000   # バッチ処理の上限
+DEFAULT_EVENT_DURATION_HOURS = 1  # デフォルト予定時間
 
 
 class GoogleCalendarManager:
@@ -58,6 +64,44 @@ class GoogleCalendarManager:
         self.token_file = self.config.get('GoogleCalendar', 'token_file', 
                                          fallback='token.json')
         self.service = None
+    
+    def _calculate_date_range(self, events_data: List[Dict[str, Any]]) -> Tuple[datetime, datetime]:
+        """
+        スケジュールデータから同期対象の日付範囲を計算
+        
+        Args:
+            events_data: スケジュールデータ
+            
+        Returns:
+            Tuple[datetime, datetime]: (開始日, 終了日)
+        """
+        now = datetime.now()
+        start_date = datetime(now.year, now.month, 1)
+        
+        if events_data:
+            # データの最大日付を確認
+            max_year = max(item['year'] for item in events_data)
+            max_month = max(item['month'] for item in events_data if item['year'] == max_year)
+            
+            # 安全マージンを追加
+            extended_year = max_year
+            extended_month = max_month + SAFETY_MARGIN_MONTHS
+            
+            # 年の繰り上がりを処理
+            while extended_month > 12:
+                extended_month -= 12
+                extended_year += 1
+            
+            # 終了日を計算
+            if extended_month == 12:
+                end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
+        else:
+            # フォールバック: 現在から3ヶ月先まで
+            end_date = datetime(now.year, now.month + SAFETY_MARGIN_MONTHS, 1) - timedelta(days=1)
+        
+        return start_date, end_date
     
     def _calculate_event_hash(self, event_data: Dict[str, Any]) -> str:
         """
@@ -149,30 +193,8 @@ class GoogleCalendarManager:
         try:
             logger.info(f"差分同期開始: {len(events_data)}件の新規データ")
             
-            # 1. 既存予定を取得
-            now = datetime.now()
-            start_date = datetime(now.year, now.month, 1)
-            
-            # 取得したスケジュールデータの最大日付を確認
-            if events_data:
-                max_year = max(item['year'] for item in events_data)
-                max_month = max(item['month'] for item in events_data if item['year'] == max_year)
-                
-                # 安全マージン3ヶ月
-                extended_year = max_year
-                extended_month = max_month + 3
-                
-                while extended_month > 12:
-                    extended_month -= 12
-                    extended_year += 1
-                
-                if extended_month == 12:
-                    end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
-            else:
-                end_date = datetime(now.year, now.month + 3, 1) - timedelta(days=1)
-            
+            # 1. 同期対象の日付範囲を計算
+            start_date, end_date = self._calculate_date_range(events_data)
             logger.info(f"既存予定取得: {start_date.date()} ～ {end_date.date()}")
             
             # 既存予定を取得
@@ -285,7 +307,7 @@ class GoogleCalendarManager:
                     deleted_count += 1
             
             # バッチ処理で削除
-            max_batch_size = 1000
+            max_batch_size = BATCH_SIZE_LIMIT
             total_events = len(events)
             
             for i in range(0, total_events, max_batch_size):
@@ -333,7 +355,7 @@ class GoogleCalendarManager:
                     created_count += 1
             
             # バッチ処理で作成
-            max_batch_size = 1000
+            max_batch_size = BATCH_SIZE_LIMIT
             total_events = len(events_data)
             
             for i in range(0, total_events, max_batch_size):
@@ -483,11 +505,11 @@ class GoogleCalendarManager:
                 else:
                     deleted_count += 1
             
-            # Google Calendar APIの制限：1000件/バッチ
-            max_batch_size = 1000
+            # Google Calendar APIの制限：バッチ処理上限
+            max_batch_size = BATCH_SIZE_LIMIT
             total_events = len(events)
             
-            # 1000件以下の場合は一括処理、それ以上の場合は分割処理
+            # 制限件数以下の場合は一括処理、それ以上の場合は分割処理
             if total_events <= max_batch_size:
                 # 一括削除（通常のケース）
                 batch = self.service.new_batch_http_request(callback=delete_callback)
@@ -502,7 +524,7 @@ class GoogleCalendarManager:
                 batch.execute()
                 logger.info(f"一括削除完了: {total_events}件")
             else:
-                # 1000件を超える場合のみ分割処理
+                # 制限件数を超える場合のみ分割処理
                 logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
                 for i in range(0, total_events, max_batch_size):
                     batch_events = events[i:i + max_batch_size]
@@ -576,8 +598,8 @@ class GoogleCalendarManager:
                     created_count += 1
                     logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
             
-            # Google Calendar APIの制限：1000件/バッチ
-            max_batch_size = 1000
+            # Google Calendar APIの制限：バッチ処理上限
+            max_batch_size = BATCH_SIZE_LIMIT
             total_events = len(events_data)
             
             # バッチ処理実行
@@ -606,9 +628,10 @@ class GoogleCalendarManager:
             event_data: イベントデータ
             
         Returns:
-            str: 一意なrequest_id（日付+時刻+タイトル形式）
+            str: 一意なrequest_id（日付+時刻+タイトル+タイムスタンプ形式）
         """
-        return f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}"
+        timestamp = int(time.time() * 1000)  # ミリ秒単位のタイムスタンプ
+        return f"{event_data['year']}-{event_data['month']:02d}-{event_data['day']:02d}_{event_data['hour']:02d}{event_data['minute']:02d}_{event_data['title']}_{timestamp}"
     
     def _create_event_object(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -670,8 +693,8 @@ class GoogleCalendarManager:
                 event_data['minute']
             )
             
-            # 終了時刻（開始時刻+1時間）
-            end_datetime = start_datetime + timedelta(hours=1)
+            # 終了時刻（開始時刻+デフォルト時間）
+            end_datetime = start_datetime + timedelta(hours=DEFAULT_EVENT_DURATION_HOURS)
             
             # description作成（チャンネルURL含む）
             description_parts = [f"原文: {event_data.get('raw_text', '')}"]
@@ -695,7 +718,7 @@ class GoogleCalendarManager:
     
     def _execute_single_batch(self, events_data: List[Dict[str, Any]], callback) -> None:
         """
-        一括バッチ処理（1000件以下）
+        一括バッチ処理（制限件数以下）
         """
         batch = self.service.new_batch_http_request(callback=callback)
         
@@ -719,7 +742,7 @@ class GoogleCalendarManager:
     
     def _execute_multiple_batches(self, events_data: List[Dict[str, Any]], max_batch_size: int, callback) -> None:
         """
-        分割バッチ処理（1000件超過）
+        分割バッチ処理（制限件数超過）
         """
         total_events = len(events_data)
         logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")

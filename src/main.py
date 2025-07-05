@@ -99,68 +99,14 @@ class AikatsuScheduleSync:
                 logger.warning("取得できるスケジュールがありません")
                 return True  # エラーではないので成功とする
             
-            # 3. 同期期間の設定（十分な範囲をカバーして不正データを削除）
-            now = datetime.now()
-            start_date = datetime(now.year, now.month, 1)
-            
-            # 取得したスケジュールデータの最大日付を確認
-            if schedule_data:
-                max_year = max(item['year'] for item in schedule_data)
-                max_month = max(item['month'] for item in schedule_data if item['year'] == max_year)
-                
-                # データ取得範囲の末日
-                if max_month == 12:
-                    data_end_date = datetime(max_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    data_end_date = datetime(max_year, max_month + 1, 1) - timedelta(days=1)
-                
-                # 安全のため、データ範囲から3ヶ月先まで削除範囲を拡張
-                # （過去のバグで登録された不正データを確実に削除するため）
-                extended_year = max_year
-                extended_month = max_month + 3
-                
-                # 年の繰り上がりを処理
-                while extended_month > 12:
-                    extended_month -= 12
-                    extended_year += 1
-                
-                if extended_month == 12:
-                    end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
-                
-                logger.info(f"取得データ範囲: {start_date.date()} ～ {data_end_date.date()}")
-                logger.info(f"削除対象期間: {start_date.date()} ～ {end_date.date()} （安全マージン含む）")
-            else:
-                # フォールバック: 来月末日から3ヶ月先まで
-                if now.month == 12:
-                    next_month_year = now.year + 1
-                    next_month = 1
-                else:
-                    next_month_year = now.year
-                    next_month = now.month + 1
-                
-                # 3ヶ月先まで拡張
-                extended_year = next_month_year
-                extended_month = next_month + 2  # 来月+2ヶ月 = 3ヶ月先
-                
-                while extended_month > 12:
-                    extended_month -= 12
-                    extended_year += 1
-                
-                if extended_month == 12:
-                    end_date = datetime(extended_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    end_date = datetime(extended_year, extended_month + 1, 1) - timedelta(days=1)
-                
-                logger.warning(f"取得データなし、フォールバック期間: {start_date.date()} ～ {end_date.date()}")
-            
-            # 4. 差分更新による高速同期
+            # 3. 差分更新による高速同期
             logger.info("差分更新による高速同期を開始...")
             
             # 🔧 重複バグ防止：初回実行時は強制削除
             if os.getenv('GITHUB_ACTIONS') == 'true':
                 logger.info("🧹 GitHub Actions環境 - 重複防止のため事前削除を実行")
+                # 日付範囲計算はgcal_manager内で実行
+                start_date, end_date = self.gcal_manager._calculate_date_range(schedule_data)
                 self.gcal_manager.clear_events(start_date, end_date)
                 logger.info("事前削除完了")
             
@@ -171,6 +117,7 @@ class AikatsuScheduleSync:
                 logger.warning("差分更新に失敗しました - フォールバック処理を実行します")
                 
                 # フォールバック: 従来の全削除・全作成処理
+                start_date, end_date = self.gcal_manager._calculate_date_range(schedule_data)
                 logger.info(f"既存予定削除中: {start_date.date()} ～ {end_date.date()}")
                 if not self.gcal_manager.clear_events(start_date, end_date):
                     logger.error("既存予定の削除に失敗しました")
