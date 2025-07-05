@@ -30,10 +30,16 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: 依存関係をインストール
+    - name: uvをセットアップ
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+    
+    - name: 依存関係をインストール（uvを使用）
       run: |
-        python -m pip install --upgrade pip
-        pip install -e .
+        echo "📦 uvを使用して依存関係をインストール中..."
+        uv sync --locked
+        echo "✅ 依存関係のインストールが完了しました"
     
     - name: Google認証情報を設定
       env:
@@ -119,7 +125,7 @@ jobs:
     - name: スケジュール同期を実行
       run: |
         cd src
-        python main.py --manual --config ../config.ini
+        uv run python main.py --manual --config ../config.ini
     
     - name: 実行結果をSlackに通知（オプション）
       if: always()
@@ -127,9 +133,9 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          message="✅ アイカツアカデミー！スケジュール同期が成功しました"
+          message="✅ アイカツアカデミー！スケジュール同期が成功しました（uvを使用）"
         else
-          message="❌ アイカツアカデミー！スケジュール同期が失敗しました"
+          message="❌ アイカツアカデミー！スケジュール同期が失敗しました（uvを使用）"
         fi
         
         if [ -n "$SLACK_WEBHOOK_URL" ]; then
