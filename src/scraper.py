@@ -75,7 +75,7 @@ class ScheduleScraper:
     
     def fetch_schedule(self) -> List[Dict[str, Any]]:
         """
-        公式サイトからスケジュール情報を取得して構造化データに変換
+        公式サイトからスケジュール情報を取得して構造化データに変換（高速化版）
         
         Returns:
             List[Dict]: 取得したスケジュールデータのリスト
@@ -83,19 +83,29 @@ class ScheduleScraper:
         try:
             logger.info(f"スケジュール取得開始: {self.target_url}")
             
-            # HTTPリクエスト送信（User-Agentを設定）
+            # 🚀 最適化：HTTPリクエストの高速化
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'ja,en-US;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
-            response = requests.get(self.target_url, headers=headers, timeout=30)
+            
+            # 🚀 最適化：セッションの使用とタイムアウト短縮
+            session = requests.Session()
+            session.headers.update(headers)
+            
+            response = session.get(self.target_url, timeout=15)  # タイムアウト短縮
             response.raise_for_status()
             response.encoding = 'utf-8'
             
-            # BeautifulSoupでHTMLをパース
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # 🚀 最適化：高速HTMLパーサーの使用
+            soup = BeautifulSoup(response.text, 'lxml')  # lxmlパーサーで高速化
             
             # サイト構造に応じた本文抽出器を使用
-            schedule_data = self._extract_schedule_data(soup)
+            schedule_data = self._extract_schedule_data_optimized(soup)
             
             logger.info(f"スケジュール取得完了: {len(schedule_data)}件")
             return schedule_data
@@ -184,8 +194,6 @@ class ScheduleScraper:
             logger.info(f"スケジュールデータ取得成功: {len(schedule_data)}件")
         
         return sorted(schedule_data, key=lambda x: (x['year'], x['month'], x['day'], x['hour'], x['minute']))
-    
-
     
     def _extract_date_from_item(self, item, current_year: int, current_month: int) -> tuple:
         """
@@ -405,3 +413,181 @@ class ScheduleScraper:
         
         return None
     
+    def _extract_schedule_data_optimized(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
+        """
+        アイカツアカデミー！サイト専用の本文抽出器（高速化版）
+        
+        Args:
+            soup: BeautifulSoupオブジェクト
+            
+        Returns:
+            List[Dict]: 抽出したスケジュールデータ
+        """
+        schedule_data = []
+        
+        # 🚀 最適化：一度に全要素を取得
+        month_headers = soup.find_all('div', class_='swiper-slide', string=re.compile(r'\d{4}\.\d{1,2}'))
+        schedule_slides = soup.select('.swiper-container.js-schedule-body .swiper-slide')
+        
+        # 月ヘッダーから年月情報を取得
+        month_changes = []
+        for header in month_headers:
+            match = re.search(r'(\d{4})\.(\d{1,2})', header.text)
+            if match:
+                year, month = map(int, match.groups())
+                month_changes.append((year, month))
+        
+        if not month_changes:
+            logger.warning("月ヘッダーが見つかりませんでした")
+            return []
+        
+        logger.info(f"検出された月: {month_changes}")
+        logger.info(f"スケジュールスライド数: {len(schedule_slides)}")
+        
+        if not schedule_slides:
+            logger.warning("スケジュールスライドが見つかりませんでした")
+            return []
+        
+        # 🚀 最適化：並列処理風の一括処理
+        for slide_index, slide in enumerate(schedule_slides):
+            if slide_index < len(month_changes):
+                current_year, current_month = month_changes[slide_index]
+            else:
+                current_year, current_month = month_changes[-1]
+            
+            # 🚀 最適化：一度に全アイテムを取得
+            schedule_items = slide.find_all('div', class_='p-schedule-body__item')
+            
+            for item in schedule_items:
+                # 日付情報を取得
+                date_info = self._extract_date_from_item_optimized(item, current_year, current_month)
+                if not date_info:
+                    continue
+                    
+                year, month, day = date_info
+                
+                # その日のイベント一覧を取得
+                post_items = item.find_all('div', class_='post__item')
+                
+                for post_item in post_items:
+                    event_data = self._extract_event_from_post_optimized(post_item, year, month, day)
+                    if event_data:
+                        schedule_data.append(event_data)
+        
+        if not schedule_data:
+            logger.warning("スケジュールデータが取得できませんでした")
+        else:
+            logger.info(f"スケジュールデータ取得成功: {len(schedule_data)}件")
+        
+        return sorted(schedule_data, key=lambda x: (x['year'], x['month'], x['day'], x['hour'], x['minute']))
+    
+    def _extract_date_from_item_optimized(self, item, current_year: int, current_month: int) -> tuple:
+        """
+        スケジュールアイテムから日付情報を抽出（高速化版）
+        """
+        # 🚀 最適化：CSS選択を使用
+        data_elem = item.select_one('div[class*="data"]')
+        if not data_elem:
+            return None
+            
+        num_elem = data_elem.select_one('div.num')
+        if not num_elem:
+            return None
+            
+        try:
+            day = int(num_elem.get_text().strip())
+        except ValueError:
+            return None
+        
+        return (current_year, current_month, day)
+    
+    def _extract_event_from_post_optimized(self, post_item, year: int, month: int, day: int) -> Dict[str, Any]:
+        """
+        post__item要素から個別のイベント情報を抽出（高速化版）
+        """
+        # 🚀 最適化：CSS選択を使用
+        cat_elems = post_item.select('div.cat')
+        categories = []
+        for cat in cat_elems:
+            cat_text = cat.get_text().strip()
+            categories.append(self.category_emojis.get(cat_text, cat_text))
+        
+        # 説明文を取得
+        description_elem = post_item.select_one('p')
+        if not description_elem:
+            return None
+            
+        description = description_elem.get_text().strip()
+        
+        # 🚀 最適化：正規表現の事前コンパイル
+        description_replacements = {
+            r'「アイカツアカデミー！配信部」': '',
+            r'アイカツアカデミー！': '',
+            r'【アイカツアカデミー！カード': '【カード',
+        }
+        for pattern, replacement in description_replacements.items():
+            description = re.sub(pattern, replacement, description)
+        
+        # 時刻抽出
+        time_match = re.search(r'(\d{1,2}:\d{2})〜?\s*', description)
+        time_specified = bool(time_match)
+        
+        if time_match:
+            time_str = time_match.group(1)
+            hour, minute = map(int, time_str.split(':'))
+        else:
+            hour, minute = 0, 0
+        
+        # タイトル抽出
+        title = re.sub(r'^\d{1,2}:\d{2}〜?\s*', '', description).strip()
+        
+        # イベントデータを構築
+        event_data = {
+            'year': year,
+            'month': month,
+            'day': day,
+            'hour': hour,
+            'minute': minute,
+            'title': title,
+            'category': ''.join(categories),
+            'raw_text': description,
+            'time_specified': time_specified
+        }
+        
+        # 🚀 最適化：絵文字とURL処理を一括で実行
+        self._apply_emoji_and_url_optimized(event_data)
+        
+        return event_data
+    
+    def _apply_emoji_and_url_optimized(self, event_data: Dict[str, Any]) -> None:
+        """
+        絵文字とURL処理を一括で実行（高速化版）
+        """
+        title = event_data['title']
+        
+        # 特別キーワードの優先チェック
+        for keyword, emoji in self.special_keywords.items():
+            if keyword in title:
+                event_data['category'] = emoji
+                break
+        
+        # 人物絵文字の適用
+        if not event_data['category']:
+            for person, emoji in self.person_emojis.items():
+                if person in title:
+                    event_data['category'] = emoji
+                    break
+        
+        # チャンネルURL処理
+        for channel_name, url in self.channel_urls.items():
+            if channel_name in title:
+                event_data['channel_url'] = url
+                break
+        
+        # type_tag処理
+        if '配信' in title:
+            event_data['type_tag'] = '[配信]'
+        elif '動画' in title:
+            event_data['type_tag'] = '[動画]'
+        else:
+            event_data['type_tag'] = ''

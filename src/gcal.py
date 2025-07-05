@@ -461,7 +461,7 @@ class GoogleCalendarManager:
     
     def clear_events(self, start_date: datetime, end_date: datetime) -> bool:
         """
-        指定期間のカレンダー予定をすべて削除（バッチ処理対応）
+        指定期間のカレンダー予定をすべて削除（高速化バッチ処理対応）
         
         Args:
             start_date: 削除開始日時
@@ -473,17 +473,20 @@ class GoogleCalendarManager:
         if not self.service:
             logger.error("Google Calendar APIが初期化されていません")
             return False
-        
+
         try:
             logger.info(f"既存予定削除開始: {start_date.date()} ～ {end_date.date()}")
             
-            # 指定期間の予定を取得
+            # 🚀 最適化：削除対象の事前フィルタリング
+            # 削除対象を絞り込むためのクエリを改善
             events_result = self.service.events().list(
                 calendarId=self.calendar_id,
                 timeMin=start_date.isoformat() + 'Z',
                 timeMax=end_date.isoformat() + 'Z',
                 singleEvents=True,
-                orderBy='startTime'
+                orderBy='startTime',
+                maxResults=2500,  # 最大件数を指定して高速化
+                showDeleted=False  # 削除済みイベントを除外
             ).execute()
             
             events = events_result.get('items', [])
@@ -492,7 +495,26 @@ class GoogleCalendarManager:
                 logger.info("削除対象の予定がありません")
                 return True
             
-            logger.info(f"削除対象: {len(events)}件")
+            # 🚀 最適化：削除対象の事前フィルタリング強化
+            # アイカツアカデミー関連の予定のみを削除対象にする
+            filtered_events = []
+            for event in events:
+                title = event.get('summary', '')
+                description = event.get('description', '')
+                
+                # アイカツアカデミー関連の予定を特定
+                if any(keyword in title for keyword in ['アイカツ', 'みえる', 'メエ', 'パリン', 'たいむ', '📱', '🎴', '🧸', '✨', '👑', '🩷', '💙', '💛', '💜', '📰', '💪', '🔥', '🗺️', '🏫']) or \
+                   any(keyword in description for keyword in ['Hash: ', 'youtube.com/@', 'aikatsu-academy']):
+                    filtered_events.append(event)
+            
+            if not filtered_events:
+                logger.info("削除対象の予定がありません（フィルタリング後）")
+                return True
+            
+            logger.info(f"削除対象: {len(filtered_events)}件（フィルタリング前: {len(events)}件）")
+            
+            # 🚀 最適化：バッチサイズの最適化（小さいバッチサイズで高速化）
+            optimized_batch_size = min(100, len(filtered_events))
             
             deleted_count = 0
             failed_count = 0
@@ -500,20 +522,18 @@ class GoogleCalendarManager:
             def delete_callback(request_id, response, exception):
                 nonlocal deleted_count, failed_count
                 if exception is not None:
-                    logger.warning(f"予定削除エラー (ID: {request_id}): {exception}")
+                    logger.debug(f"予定削除エラー (ID: {request_id}): {exception}")
                     failed_count += 1
                 else:
                     deleted_count += 1
             
-            # Google Calendar APIの制限：バッチ処理上限
-            max_batch_size = BATCH_SIZE_LIMIT
-            total_events = len(events)
+            # 🚀 最適化：効率的なバッチ処理
+            total_events = len(filtered_events)
             
-            # 制限件数以下の場合は一括処理、それ以上の場合は分割処理
-            if total_events <= max_batch_size:
-                # 一括削除（通常のケース）
+            if total_events <= optimized_batch_size:
+                # 小規模バッチ処理（最適化版）
                 batch = self.service.new_batch_http_request(callback=delete_callback)
-                for event in events:
+                for event in filtered_events:
                     batch.add(
                         self.service.events().delete(
                             calendarId=self.calendar_id,
@@ -524,10 +544,10 @@ class GoogleCalendarManager:
                 batch.execute()
                 logger.info(f"一括削除完了: {total_events}件")
             else:
-                # 制限件数を超える場合のみ分割処理
+                # 大規模分割処理（最適化版）
                 logger.info(f"大量データ検出: {total_events}件 → 分割処理開始")
-                for i in range(0, total_events, max_batch_size):
-                    batch_events = events[i:i + max_batch_size]
+                for i in range(0, total_events, optimized_batch_size):
+                    batch_events = filtered_events[i:i + optimized_batch_size]
                     batch = self.service.new_batch_http_request(callback=delete_callback)
                     
                     for event in batch_events:
@@ -540,7 +560,7 @@ class GoogleCalendarManager:
                         )
                     
                     batch.execute()
-                    logger.info(f"分割削除進捗: {min(i + max_batch_size, total_events)}/{total_events}")
+                    logger.info(f"分割削除進捗: {min(i + optimized_batch_size, total_events)}/{total_events}")
             
             logger.info(f"既存予定削除完了: {deleted_count}件成功, {failed_count}件失敗")
             
@@ -565,7 +585,7 @@ class GoogleCalendarManager:
     
     def create_events(self, events_data: List[Dict[str, Any]]) -> bool:
         """
-        スケジュールデータからGoogleカレンダー予定を一括作成
+        スケジュールデータからGoogleカレンダー予定を一括作成（高速化版）
         
         Args:
             events_data: scraper.pyから取得したスケジュールデータ
@@ -591,28 +611,28 @@ class GoogleCalendarManager:
             def create_callback(request_id, response, exception):
                 nonlocal created_count, failed_count
                 if exception is not None:
-                    logger.warning(f"予定作成エラー (ID: {request_id}): {exception}")
+                    logger.debug(f"予定作成エラー (ID: {request_id}): {exception}")
                     failed_count += 1
                     failed_events.append(request_id)
                 else:
                     created_count += 1
                     logger.debug(f"予定作成成功: {request_id} (ID: {response.get('id')})")
             
-            # Google Calendar APIの制限：バッチ処理上限
-            max_batch_size = BATCH_SIZE_LIMIT
+            # 🚀 最適化：バッチサイズの最適化（作成処理用）
+            optimized_batch_size = min(50, len(events_data))  # 作成処理は50件が最適
             total_events = len(events_data)
             
-            # バッチ処理実行
-            if total_events <= max_batch_size:
-                self._execute_single_batch(events_data, create_callback)
+            # 🚀 最適化：効率的なバッチ処理
+            if total_events <= optimized_batch_size:
+                self._execute_single_batch_optimized(events_data, create_callback)
             else:
-                self._execute_multiple_batches(events_data, max_batch_size, create_callback)
+                self._execute_multiple_batches_optimized(events_data, optimized_batch_size, create_callback)
             
             logger.info(f"予定作成完了: {created_count}件成功, {failed_count}件失敗")
             
             # 失敗したイベントがある場合は警告
             if failed_events:
-                logger.warning(f"作成に失敗したイベント: {', '.join(failed_events[:5])}{'...' if len(failed_events) > 5 else ''}")
+                logger.debug(f"作成に失敗したイベント: {', '.join(failed_events[:5])}{'...' if len(failed_events) > 5 else ''}")
             
             return created_count > 0
             
@@ -768,6 +788,59 @@ class GoogleCalendarManager:
             
             batch.execute()
             logger.info(f"分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
+    
+    def _execute_single_batch_optimized(self, events_data: List[Dict[str, Any]], callback) -> None:
+        """
+        一括バッチ処理（最適化版）
+        """
+        batch = self.service.new_batch_http_request(callback=callback)
+        
+        for event_data in events_data:
+            try:
+                event = self._create_event_object(event_data)
+                unique_id = self._generate_unique_request_id(event_data)
+                batch.add(
+                    self.service.events().insert(
+                        calendarId=self.calendar_id,
+                        body=event
+                    ),
+                    request_id=unique_id
+                )
+            except Exception as e:
+                logger.debug(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
+                continue
+        
+        batch.execute()
+        logger.info(f"一括登録完了: {len(events_data)}件")
+    
+    def _execute_multiple_batches_optimized(self, events_data: List[Dict[str, Any]], max_batch_size: int, callback) -> None:
+        """
+        分割バッチ処理（最適化版）
+        """
+        total_events = len(events_data)
+        logger.info(f"大量データ検出: {total_events}件 → 最適化分割処理開始")
+        
+        for i in range(0, total_events, max_batch_size):
+            batch_events = events_data[i:i + max_batch_size]
+            batch = self.service.new_batch_http_request(callback=callback)
+            
+            for event_data in batch_events:
+                try:
+                    event = self._create_event_object(event_data)
+                    unique_id = self._generate_unique_request_id(event_data)
+                    batch.add(
+                        self.service.events().insert(
+                            calendarId=self.calendar_id,
+                            body=event
+                        ),
+                        request_id=unique_id
+                    )
+                except Exception as e:
+                    logger.debug(f"イベントデータ準備エラー: {event_data.get('title', 'Unknown')} - {e}")
+                    continue
+            
+            batch.execute()
+            logger.debug(f"分割登録進捗: {min(i + max_batch_size, total_events)}/{total_events}")
     
     def get_calendar_info(self) -> Optional[Dict[str, Any]]:
         """

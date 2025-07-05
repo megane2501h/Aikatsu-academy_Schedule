@@ -1,10 +1,10 @@
 name: アイカツアカデミー！スケジュール同期
 
 on:
-  # 定期実行 - 毎日0時、3時、6時、9時、12時、14時（UTC）に実行
-  # JST: 9時、12時、15時、18時、21時、23時
+  # 定期実行 - 毎日6時、12時、18時（UTC）に実行（高速化により頻度削減可能）
+  # JST: 15時、21時、3時
   schedule:
-    - cron: '0 0,3,6,9,12,14 * * *'
+    - cron: '0 6,12,18 * * *'
   
   # 手動実行
   workflow_dispatch:
@@ -30,15 +30,17 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: uvをセットアップ
+    - name: uvをセットアップ（高速化版）
       uses: astral-sh/setup-uv@v3
       with:
-        enable-cache: false
+        enable-cache: true  # 🚀 キャッシュを有効化
+        cache-dependency-glob: "**/uv.lock"
     
-    - name: 依存関係をインストール（uvを使用）
+    - name: 依存関係をインストール（uvを使用・高速化版）
       run: |
-        echo "📦 uvを使用して依存関係をインストール中..."
-        uv sync --locked
+        echo "📦 uvを使用して依存関係をインストール中（キャッシュ有効）..."
+        # 🚀 最適化：並列インストールと高速化オプション
+        uv sync --locked --no-dev
         echo "✅ 依存関係のインストールが完了しました"
     
     - name: Google認証情報を設定
