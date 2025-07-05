@@ -49,10 +49,10 @@ class GoogleCalendarManager:
         self.config = configparser.ConfigParser()
         self.config.read(config_path, encoding='utf-8')
         
-        self.calendar_id = self.config.get('GoogleCalendar', 'CALENDAR_ID')
-        self.credentials_file = self.config.get('GoogleCalendar', 'CREDENTIALS_FILE', 
+        self.calendar_id = self.config.get('GoogleCalendar', 'calendar_id')
+        self.credentials_file = self.config.get('GoogleCalendar', 'credentials_file', 
                                                fallback='credentials.json')
-        self.token_file = self.config.get('GoogleCalendar', 'TOKEN_FILE', 
+        self.token_file = self.config.get('GoogleCalendar', 'token_file', 
                                          fallback='token.json')
         self.service = None
     
@@ -68,16 +68,27 @@ class GoogleCalendarManager:
             
             # 既存のトークンファイル確認
             if os.path.exists(self.token_file):
-                creds = Credentials.from_authorized_user_file(self.token_file, SCOPES)
+                try:
+                    creds = Credentials.from_authorized_user_file(self.token_file, SCOPES)
+                except Exception as e:
+                    logger.warning(f"トークンファイルの読み込みエラー: {e}")
+                    creds = None
             
             # トークンが無効または存在しない場合
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
                     # トークンのリフレッシュ
                     logger.info("アクセストークンをリフレッシュ中...")
-                    creds.refresh(Request())
-                else:
-                    # 新規OAuth認証
+                    try:
+                        creds.refresh(Request())
+                        logger.info("トークンリフレッシュ成功")
+                    except Exception as e:
+                        logger.error(f"トークンリフレッシュ失敗: {e}")
+                        logger.info("新しいトークンが必要です")
+                        creds = None
+                
+                # リフレッシュに失敗した場合または初回認証の場合
+                if not creds or not creds.valid:
                     logger.info("OAuth認証を開始...")
                     if not os.path.exists(self.credentials_file):
                         logger.error(f"認証情報ファイルが見つかりません: {self.credentials_file}")
@@ -85,11 +96,27 @@ class GoogleCalendarManager:
                     
                     flow = InstalledAppFlow.from_client_secrets_file(
                         self.credentials_file, SCOPES)
-                    creds = flow.run_local_server(port=0)
+                    
+                    # 非対話的環境での認証処理
+                    # GitHub Actionsなどの環境では、認証済みのトークンを使用
+                    # ローカル環境では対話的認証を使用
+                    import sys
+                    if sys.stdin.isatty():
+                        # 対話的環境（ローカル開発）
+                        creds = flow.run_local_server(port=0)
+                    else:
+                        # 非対話的環境（GitHub Actions）
+                        logger.error("非対話的環境では事前に認証されたトークンが必要です")
+                        logger.error("GitHub Actionsのsecretsで有効なトークンを設定してください")
+                        return False
                 
                 # トークンを保存
-                with open(self.token_file, 'w') as token:
-                    token.write(creds.to_json())
+                try:
+                    with open(self.token_file, 'w') as token:
+                        token.write(creds.to_json())
+                    logger.info("認証トークンを保存しました")
+                except Exception as e:
+                    logger.warning(f"トークンの保存に失敗しました: {e}")
                 
                 logger.info("認証完了")
             
@@ -311,7 +338,7 @@ class GoogleCalendarManager:
             # description作成（チャンネルURL含む）
             description_parts = [f"原文: {event_data.get('raw_text', '')}"]
             if event_data.get('channel_url'):
-                description_parts.append(f"チャンネル: {event_data['channel_url']}")
+                description_parts.append(f"URL: {event_data['channel_url']}")
             description = "\n".join(description_parts)
             
             return {

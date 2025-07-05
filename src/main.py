@@ -58,7 +58,7 @@ class AikatsuScheduleSync:
         self.gcal_manager = GoogleCalendarManager(config_path)
         
         # 設定値の読み込み
-        self.update_interval_hours = self.config.getint('Sync', 'UPDATE_INTERVAL_HOURS', 
+        self.update_interval_hours = self.config.getint('Sync', 'update_interval_hours', 
                                                        fallback=6)
         
         # 古い絵文字設定は不要（scraper.pyで処理済み）
@@ -82,6 +82,14 @@ class AikatsuScheduleSync:
             logger.info("Google Calendar API認証中...")
             if not self.gcal_manager.authenticate():
                 logger.error("Google Calendar API認証に失敗しました")
+                logger.error("🔧 解決方法:")
+                logger.error("  1. トークンの有効期限が切れている可能性があります")
+                logger.error("  2. GitHub Actionsのsecretsを更新してください:")
+                logger.error("     - GOOGLE_CREDENTIALS: OAuth2.0認証情報")
+                logger.error("     - GOOGLE_TOKEN: アクセストークン")
+                logger.error("     - CALENDAR_ID: カレンダーID")
+                logger.error("  3. ローカルで認証し直してトークンを更新してください")
+                logger.error("  4. utils/scrape_only.py でスクレーピングのみテストできます")
                 return False
             
             # 2. スケジュール取得
@@ -179,7 +187,7 @@ class AikatsuScheduleSync:
         """
         try:
             # カレンダーIDの検証
-            calendar_id = self.config.get('GoogleCalendar', 'CALENDAR_ID')
+            calendar_id = self.config.get('GoogleCalendar', 'calendar_id')
             
             # サンプル値の検出
             if calendar_id in ['your_calendar_id@group.calendar.google.com', '']:
@@ -196,7 +204,7 @@ class AikatsuScheduleSync:
                 return False
             
             # 認証ファイルの存在チェック
-            credentials_file = self.config.get('GoogleCalendar', 'CREDENTIALS_FILE', fallback='credentials.json')
+            credentials_file = self.config.get('GoogleCalendar', 'credentials_file', fallback='credentials.json')
             if not os.path.exists(credentials_file):
                 logger.error(f"❌ 認証ファイルが見つかりません: {credentials_file}")
                 logger.error("📝 Google Cloud Consoleからcredentials.jsonをダウンロードしてください")

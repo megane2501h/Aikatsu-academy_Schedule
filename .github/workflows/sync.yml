@@ -40,8 +40,22 @@ jobs:
         GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         GOOGLE_TOKEN: ${{ secrets.GOOGLE_TOKEN }}
       run: |
+        echo "Google認証情報を設定中..."
         echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
         echo '${{ secrets.GOOGLE_TOKEN }}' > token.json
+        
+        # 認証ファイルの存在を確認
+        if [ ! -f credentials.json ] || [ ! -s credentials.json ]; then
+          echo "❌ credentials.jsonが空または存在しません"
+          exit 1
+        fi
+        
+        if [ ! -f token.json ] || [ ! -s token.json ]; then
+          echo "❌ token.jsonが空または存在しません"
+          exit 1
+        fi
+        
+        echo "✅ 認証ファイルを正常に設定しました"
     
     - name: 設定ファイルを作成
       env:
