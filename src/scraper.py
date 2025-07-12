@@ -573,6 +573,8 @@ class ScheduleScraper:
         1. チャンネル絵文字（[]内の内容から判定・最優先）
         2. 特別キーワード（2文字目として追加）
         3. カテゴリ絵文字（フォールバック）
+        4. タイトルからチャンネル名を削除
+        5. チャンネルタイプに基づいてtype_tagを決定
         """
         title = event_data['title']
         original_category = event_data.get('category', '')
@@ -580,19 +582,39 @@ class ScheduleScraper:
         # 🐛 デバッグ情報を出力
         logger.info(f"絵文字適用前: タイトル='{title}', カテゴリ='{original_category}'")
         
-        # 1. チャンネル絵文字の適用（[]内の内容から判定・最優先）
+        # 1. チャンネル絵文字とURL処理（[]内の内容から判定・最優先）
         channel_emoji = ''
+        channel_type_tag = ''
         # []内の内容を抽出
         import re
         bracket_match = re.search(r'\[([^\]]+)\]', title)
         if bracket_match:
             bracket_content = bracket_match.group(1)
-            # チャンネル絵文字を検索
+            # チャンネル絵文字とURLを検索
             for channel_name, emoji in self.channel_emojis.items():
                 if channel_name in bracket_content:
                     channel_emoji = emoji
-                    logger.info(f"チャンネル絵文字適用: '[{bracket_content}]' -> '{emoji}'")
+                    # チャンネルタイプに基づいてtype_tagを決定
+                    if '個人配信' in bracket_content:
+                        channel_type_tag = '[配信]'
+                    elif '個人ch' in bracket_content:
+                        channel_type_tag = '[動画]'
+                    logger.info(f"チャンネル絵文字適用: '[{bracket_content}]' -> '{emoji}' タグ='{channel_type_tag}'")
                     break
+            
+            # チャンネルURL処理（タイトル修正前に実行）
+            event_data['channel_url'] = ''  # 初期化
+            for channel_name, url in self.channel_urls.items():
+                if channel_name in bracket_content:
+                    event_data['channel_url'] = url
+                    logger.info(f"チャンネルURL適用: '{channel_name}' -> '{url}'")
+                    break
+            
+            # タイトルからチャンネル名部分を削除
+            title = re.sub(r'\[([^\]]+)\]', '', title).strip()
+            # 連続する空白を1つにまとめる
+            title = re.sub(r'\s+', ' ', title)
+            event_data['title'] = title
         
         # 2. 特別キーワードの適用（2文字目として追加、複数可能）
         special_emoji = ''
@@ -616,16 +638,10 @@ class ScheduleScraper:
             event_data['category'] = original_category
             logger.info(f"カテゴリ絵文字維持: '{original_category}'")
         
-        # 4. チャンネルURL処理
-        event_data['channel_url'] = ''  # 初期化
-        for channel_name, url in self.channel_urls.items():
-            if channel_name in title:
-                event_data['channel_url'] = url
-                logger.info(f"チャンネルURL適用: '{channel_name}' -> '{url}'")
-                break
-        
-        # 5. type_tag処理
-        if '配信' in title:
+        # 4. type_tag処理（チャンネルタイプが優先、フォールバックで従来ロジック）
+        if channel_type_tag:
+            event_data['type_tag'] = channel_type_tag
+        elif '配信' in title:
             event_data['type_tag'] = '[配信]'
         elif '動画' in title:
             event_data['type_tag'] = '[動画]'
@@ -633,7 +649,7 @@ class ScheduleScraper:
             event_data['type_tag'] = ''
         
         # 🐛 デバッグ情報を出力
-        logger.info(f"絵文字適用後: タイトル='{title}', カテゴリ='{event_data.get('category', '')}', URL='{event_data.get('channel_url', '')}'")
+        logger.info(f"絵文字適用後: タイトル='{title}', カテゴリ='{event_data.get('category', '')}', タグ='{event_data.get('type_tag', '')}', URL='{event_data.get('channel_url', '')}'")
         
         # フォールバック: 何も該当しない場合は公式サイトを追加
         if not event_data.get('channel_url'):
