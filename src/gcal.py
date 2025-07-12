@@ -419,26 +419,30 @@ class GoogleCalendarManager:
                 
                 # リフレッシュに失敗した場合または初回認証の場合
                 if not creds or not creds.valid:
-                    logger.info("OAuth認証を開始...")
-                    if not os.path.exists(self.credentials_file):
-                        logger.error(f"認証情報ファイルが見つかりません: {self.credentials_file}")
+                    # GitHub Actions環境かどうかを判定
+                    is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
+                    
+                    if is_github_actions:
+                        # GitHub Actions環境では、事前に設定されたトークンファイルを使用
+                        logger.error("GitHub Actions環境でトークンが無効です")
+                        logger.error("🔧 トークンの問題が発生しました:")
+                        logger.error("  1. GOOGLE_TOKEN secretの有効期限が切れている可能性があります")
+                        logger.error("  2. ローカルで認証し直してトークンを更新してください:")
+                        logger.error("     python src/main.py --manual")
+                        logger.error("  3. 生成されたtoken.jsonの内容をGITHUB_TOKENに設定")
+                        logger.error("  4. GOOGLE_CREDENTIALSも最新のものに更新")
                         return False
-                    
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        self.credentials_file, SCOPES)
-                    
-                    # 非対話的環境での認証処理
-                    # GitHub Actionsなどの環境では、認証済みのトークンを使用
-                    # ローカル環境では対話的認証を使用
-                    import sys
-                    if sys.stdin.isatty():
-                        # 対話的環境（ローカル開発）
-                        creds = flow.run_local_server(port=0)
                     else:
-                        # 非対話的環境（GitHub Actions）
-                        logger.error("非対話的環境では事前に認証されたトークンが必要です")
-                        logger.error("GitHub Actionsのsecretsで有効なトークンを設定してください")
-                        return False
+                        # ローカル環境では対話的認証を実行
+                        logger.info("OAuth認証を開始...")
+                        if not os.path.exists(self.credentials_file):
+                            logger.error(f"認証情報ファイルが見つかりません: {self.credentials_file}")
+                            return False
+                        
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            self.credentials_file, SCOPES)
+                        creds = flow.run_local_server(port=0)
+                        logger.info("ローカル認証完了")
                 
                 # トークンを保存
                 try:

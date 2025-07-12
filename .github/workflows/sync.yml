@@ -12,7 +12,7 @@ on:
       force_sync:
         description: '強制同期を実行（通常の同期処理を実行）'
         required: false
-        default: 'true'
+        default: true
         type: boolean
 
 jobs:
@@ -34,13 +34,17 @@ jobs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true  # 🚀 キャッシュを有効化
-        cache-dependency-glob: "**/uv.lock"
+        cache-dependency-glob: "uv.lock"
     
     - name: 依存関係をインストール（uvを使用・高速化版）
       run: |
         echo "📦 uvを使用して依存関係をインストール中（キャッシュ有効）..."
         # 🚀 最適化：並列インストールと高速化オプション
-        uv sync --locked --no-dev
+        # キャッシュエラーが発生した場合でも処理を継続
+        uv sync --locked --no-dev || {
+          echo "⚠️  キャッシュエラーが発生しました。再試行します..."
+          uv sync --locked --no-dev --no-cache
+        }
         echo "✅ 依存関係のインストールが完了しました"
     
     - name: Google認証情報を設定
@@ -55,11 +59,31 @@ jobs:
         # 認証ファイルの存在を確認
         if [ ! -f credentials.json ] || [ ! -s credentials.json ]; then
           echo "❌ credentials.jsonが空または存在しません"
+          echo "🔧 GOOGLE_CREDENTIALS secretが正しく設定されているか確認してください"
           exit 1
         fi
         
         if [ ! -f token.json ] || [ ! -s token.json ]; then
           echo "❌ token.jsonが空または存在しません"
+          echo "🔧 GOOGLE_TOKEN secretが正しく設定されているか確認してください"
+          exit 1
+        fi
+        
+        # ファイルサイズの確認
+        cred_size=$(stat -c%s credentials.json)
+        token_size=$(stat -c%s token.json)
+        echo "📊 ファイルサイズ確認:"
+        echo "  credentials.json: ${cred_size} bytes"
+        echo "  token.json: ${token_size} bytes"
+        
+        # JSON形式の妥当性チェック
+        if ! python -m json.tool credentials.json > /dev/null 2>&1; then
+          echo "❌ credentials.jsonが有効なJSON形式ではありません"
+          exit 1
+        fi
+        
+        if ! python -m json.tool token.json > /dev/null 2>&1; then
+          echo "❌ token.jsonが有効なJSON形式ではありません"
           exit 1
         fi
         
@@ -75,8 +99,8 @@ jobs:
         
         [GoogleCalendar]
         calendar_id = ${{ secrets.CALENDAR_ID }}
-        credentials_file = ../credentials.json
-        token_file = ../token.json
+        credentials_file = credentials.json
+        token_file = token.json
         
         [Sync]
         update_interval_hours = 6
@@ -108,6 +132,7 @@ jobs:
         アイカツ！ミッション = 🔥
         アイカツ！ツアーズ = 🗺️
         アイカツアカデミー！配信部 = 🏫
+        メンバーシップ限定 = 👑
         
         # チャンネルURL → 配信者マッピング（Googleカレンダーの詳細にURLを追加）
         # スケジュール上の[]内に該当した場合、チャンネルURLを追加
@@ -127,7 +152,50 @@ jobs:
     - name: スケジュール同期を実行
       run: |
         cd src
-        uv run python main.py --manual --config ../config.ini
+        echo "🚀 スケジュール同期を開始します..."
+        echo "📍 実行環境:"
+        echo "  作業ディレクトリ: $(pwd)"
+        echo "  Python バージョン: $(python --version)"
+        echo "  設定ファイル: ../config.ini"
+        
+        # 設定ファイルの確認
+        if [ ! -f ../config.ini ]; then
+          echo "❌ 設定ファイルが見つかりません: ../config.ini"
+          exit 1
+        fi
+        
+        # 認証ファイルの確認
+        if [ ! -f ../credentials.json ]; then
+          echo "❌ 認証ファイルが見つかりません: ../credentials.json"
+          exit 1
+        fi
+        
+        if [ ! -f ../token.json ]; then
+          echo "❌ トークンファイルが見つかりません: ../token.json"
+          exit 1
+        fi
+        
+        echo "✅ 必要なファイルがすべて揃いました"
+        echo "📋 実行コマンド: uv run python main.py --manual --config ../config.ini"
+        
+        # 同期実行（エラーハンドリング付き）
+        if uv run python main.py --manual --config ../config.ini; then
+          echo "✅ スケジュール同期が正常に完了しました"
+        else
+          exit_code=$?
+          echo "❌ スケジュール同期でエラーが発生しました (終了コード: $exit_code)"
+          echo "🔧 トラブルシューティング:"
+          echo "  1. Google Calendar API認証エラーの場合:"
+          echo "     - GOOGLE_CREDENTIALS secretが正しく設定されているか確認"
+          echo "     - GOOGLE_TOKEN secretが有効期限内か確認"
+          echo "     - CALENDAR_ID secretが正しいカレンダーIDか確認"
+          echo "  2. スケジュール取得エラーの場合:"
+          echo "     - 公式サイトのアクセス制限やレート制限の可能性"
+          echo "     - サイト構造の変更の可能性"
+          echo "  3. その他のエラーの場合:"
+          echo "     - ログの詳細を確認してください"
+          exit $exit_code
+        fi
     
     - name: 実行結果をSlackに通知（オプション）
       if: always()
