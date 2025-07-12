@@ -24,11 +24,11 @@ def main():
     
     try:
         # 設定ファイルのパスを指定
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'config.ini.template')
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'config.ini')
         
         # 設定ファイルが存在しない場合はテンプレートを使用
         if not os.path.exists(config_path):
-            config_path = os.path.join(os.path.dirname(__file__), '..', 'config.ini')
+            config_path = os.path.join(os.path.dirname(__file__), '..', 'config.ini.template')
         
         if not os.path.exists(config_path):
             print("⚠️  設定ファイルが見つかりません。デフォルト設定を使用します。")
@@ -40,7 +40,7 @@ def main():
         # 設定確認
         print("\n=== 設定確認 ===")
         print(f"カテゴリ絵文字: {scraper.category_emojis}")
-        print(f"人物絵文字: {scraper.person_emojis}")
+        print(f"チャンネル絵文字: {scraper.channel_emojis}")
         print(f"特別キーワード: {scraper.special_keywords}")
         
         # スケジュール取得

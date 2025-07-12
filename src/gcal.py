@@ -672,11 +672,17 @@ class GoogleCalendarManager:
         emoji = event_data.get('category', '')
         type_tag = event_data.get('type_tag', '')
         
+        # 🐛 絵文字適用のデバッグ情報
+        logger.info(f"カレンダーイベント作成: '{title}' 絵文字='{emoji}' タグ='{type_tag}'")
+        
         # 新しいタイトル形式: 絵文字 + タイトル + [配信/動画]
         if emoji:
             title = f"{emoji}{title}"
         if type_tag:
             title = f"{title}{type_tag}"
+        
+        # 🐛 最終タイトルを出力
+        logger.info(f"最終タイトル: '{title}'")
         
         # 時刻が確定していないイベントを終日予定に変更
         if not event_data.get('time_specified', True):

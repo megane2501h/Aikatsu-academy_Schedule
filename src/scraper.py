@@ -55,16 +55,16 @@ class ScheduleScraper:
             self.category_emojis = {k: v for k, v in self.config.items('CategoryEmojis') 
                                   if k not in self.config.defaults()}
         
-        # 人物 → 絵文字マッピング（DEFAULTセクションの値を除外）
-        self.person_emojis = {}
-        if self.config.has_section('PersonEmojis'):
-            self.person_emojis = {k: v for k, v in self.config.items('PersonEmojis') 
+        # チャンネル → 絵文字マッピング（DEFAULTセクションの値を除外）
+        self.channel_emojis = {}
+        if self.config.has_section('ChannelEmojis'):
+            self.channel_emojis = {k: v for k, v in self.config.items('ChannelEmojis') 
                                 if k not in self.config.defaults()}
         
         # 特別キーワード → 絵文字マッピング（最優先、DEFAULTセクションの値を除外）
         self.special_keywords = {}
         if self.config.has_section('SpecialKeywords'):
-                         self.special_keywords = {k: v for k, v in self.config.items('SpecialKeywords') 
+            self.special_keywords = {k: v for k, v in self.config.items('SpecialKeywords') 
                                     if k not in self.config.defaults()}
         
         # チャンネルURL → 配信者マッピング（DEFAULTセクションの値を除外）
@@ -72,6 +72,13 @@ class ScheduleScraper:
         if self.config.has_section('ChannelURLs'):
             self.channel_urls = {k: v for k, v in self.config.items('ChannelURLs') 
                                if k not in self.config.defaults()}
+        
+        # 🐛 絵文字設定のデバッグ情報を出力
+        logger.info(f"絵文字設定読み込み完了:")
+        logger.info(f"  カテゴリ絵文字: {self.category_emojis}")
+        logger.info(f"  チャンネル絵文字: {self.channel_emojis}")
+        logger.info(f"  特別キーワード: {self.special_keywords}")
+        logger.info(f"  チャンネルURL: {len(self.channel_urls)}件")
     
     def fetch_schedule(self) -> List[Dict[str, Any]]:
         """
@@ -562,32 +569,73 @@ class ScheduleScraper:
     def _apply_emoji_and_url_optimized(self, event_data: Dict[str, Any]) -> None:
         """
         絵文字とURL処理を一括で実行（高速化版）
+        処理順序：
+        1. チャンネル絵文字（[]内の内容から判定・最優先）
+        2. 特別キーワード（2文字目として追加）
+        3. カテゴリ絵文字（フォールバック）
         """
         title = event_data['title']
+        original_category = event_data.get('category', '')
         
-        # 特別キーワードの優先チェック
-        for keyword, emoji in self.special_keywords.items():
-            if keyword in title:
-                event_data['category'] = emoji
-                break
+        # 🐛 デバッグ情報を出力
+        logger.info(f"絵文字適用前: タイトル='{title}', カテゴリ='{original_category}'")
         
-        # 人物絵文字の適用
-        if not event_data['category']:
-            for person, emoji in self.person_emojis.items():
-                if person in title:
-                    event_data['category'] = emoji
+        # 1. チャンネル絵文字の適用（[]内の内容から判定・最優先）
+        channel_emoji = ''
+        # []内の内容を抽出
+        import re
+        bracket_match = re.search(r'\[([^\]]+)\]', title)
+        if bracket_match:
+            bracket_content = bracket_match.group(1)
+            # チャンネル絵文字を検索
+            for channel_name, emoji in self.channel_emojis.items():
+                if channel_name in bracket_content:
+                    channel_emoji = emoji
+                    logger.info(f"チャンネル絵文字適用: '[{bracket_content}]' -> '{emoji}'")
                     break
         
-        # チャンネルURL処理
+        # 2. 特別キーワードの適用（2文字目として追加）
+        special_emoji = ''
+        for keyword, emoji in self.special_keywords.items():
+            if keyword in title:
+                special_emoji = emoji
+                logger.info(f"特別キーワード適用: '{keyword}' -> '{emoji}'")
+                break
+        
+        # 3. 絵文字の組み合わせ
+        if channel_emoji:
+            # チャンネル絵文字を1文字目に設定
+            event_data['category'] = channel_emoji
+            # 特別キーワードがあれば2文字目に追加
+            if special_emoji:
+                event_data['category'] += special_emoji
+        elif special_emoji:
+            # チャンネル絵文字がない場合は特別キーワードのみ
+            event_data['category'] = special_emoji
+        elif original_category:
+            # フォールバック: 元のカテゴリ絵文字を維持
+            event_data['category'] = original_category
+            logger.info(f"カテゴリ絵文字維持: '{original_category}'")
+        
+        # 4. チャンネルURL処理
+        event_data['channel_url'] = ''  # 初期化
         for channel_name, url in self.channel_urls.items():
             if channel_name in title:
                 event_data['channel_url'] = url
+                logger.info(f"チャンネルURL適用: '{channel_name}' -> '{url}'")
                 break
         
-        # type_tag処理
+        # 5. type_tag処理
         if '配信' in title:
             event_data['type_tag'] = '[配信]'
         elif '動画' in title:
             event_data['type_tag'] = '[動画]'
         else:
             event_data['type_tag'] = ''
+        
+        # 🐛 デバッグ情報を出力
+        logger.info(f"絵文字適用後: タイトル='{title}', カテゴリ='{event_data.get('category', '')}', URL='{event_data.get('channel_url', '')}'")
+        
+        # フォールバック: 何も該当しない場合は公式サイトを追加
+        if not event_data.get('channel_url'):
+            event_data['channel_url'] = "https://aikatsu-academy.com/ https://aikatsu-academy.com/schedule/"
