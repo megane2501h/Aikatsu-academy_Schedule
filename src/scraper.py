@@ -594,13 +594,12 @@ class ScheduleScraper:
                     logger.info(f"チャンネル絵文字適用: '[{bracket_content}]' -> '{emoji}'")
                     break
         
-        # 2. 特別キーワードの適用（2文字目として追加）
+        # 2. 特別キーワードの適用（2文字目として追加、複数可能）
         special_emoji = ''
         for keyword, emoji in self.special_keywords.items():
             if keyword in title:
-                special_emoji = emoji
+                special_emoji += emoji
                 logger.info(f"特別キーワード適用: '{keyword}' -> '{emoji}'")
-                break
         
         # 3. 絵文字の組み合わせ
         if channel_emoji:
