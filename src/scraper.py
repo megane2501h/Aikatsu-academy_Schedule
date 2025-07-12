@@ -101,8 +101,8 @@ class ScheduleScraper:
             response.raise_for_status()
             response.encoding = 'utf-8'
             
-            # 🚀 最適化：高速HTMLパーサーの使用
-            soup = BeautifulSoup(response.text, 'lxml')  # lxmlパーサーで高速化
+            # 🚀 最適化：HTMLパーサーの使用
+            soup = BeautifulSoup(response.text, 'html.parser')  # 標準HTMLパーサーを使用
             
             # サイト構造に応じた本文抽出器を使用
             schedule_data = self._extract_schedule_data_optimized(soup)
