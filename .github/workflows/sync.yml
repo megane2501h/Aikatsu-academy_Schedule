@@ -99,8 +99,8 @@ jobs:
         
         [GoogleCalendar]
         calendar_id = ${{ secrets.CALENDAR_ID }}
-        credentials_file = credentials.json
-        token_file = token.json
+        credentials_file = ../credentials.json
+        token_file = ../token.json
         
         [Sync]
         update_interval_hours = 6
