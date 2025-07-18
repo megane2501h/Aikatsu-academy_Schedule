@@ -1,0 +1,17 @@
+=== アイカツアカデミー！スケジュール取得 ===
+Traceback (most recent call last):
+※ このスクリプトはGoogle Calendar APIを使用しません
+※ スクレーピングのみのテストが可能です
+  File "D:\my_program\Aikatsu-academy_Schedule\utils\scrape_only.py", line 37, in main
+    print(f"\u2705 設定ファイルを読み込み: {config_path}")
+UnicodeEncodeError: 'cp932' codec can't encode character '\u2705' in position 0: illegal multibyte sequence
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\my_program\Aikatsu-academy_Schedule\utils\scrape_only.py", line 145, in <module>
+    main() 
+    ^^^^^^
+  File "D:\my_program\Aikatsu-academy_Schedule\utils\scrape_only.py", line 138, in main
+    print(f"\u274c エラーが発生しました: {e}")
+UnicodeEncodeError: 'cp932' codec can't encode character '\u274c' in position 0: illegal multibyte sequence

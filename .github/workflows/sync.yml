@@ -1,7 +1,7 @@
 name: アイカツアカデミー！スケジュール同期
 
 on:
-  # 定期実行 - 毎日6時、12時、18時（UTC）に実行（高速化により頻度削減可能）
+  # 定期実行 - 毎日6時、12時、18時（UTC）に実行（シンプル同期方式）
   # JST: 15時、21時、3時
   schedule:
     - cron: '0 6,12,18 * * *'
@@ -36,10 +36,9 @@ jobs:
         enable-cache: true  # 🚀 キャッシュを有効化
         cache-dependency-glob: "uv.lock"
     
-    - name: 依存関係をインストール（uvを使用・高速化版）
+    - name: 依存関係をインストール（uvを使用）
       run: |
         echo "📦 uvを使用して依存関係をインストール中（キャッシュ有効）..."
-        # 🚀 最適化：並列インストールと高速化オプション
         # ロックファイルが古い場合は自動更新、キャッシュエラーの場合は再試行
         uv sync --locked --no-dev || {
           echo "⚠️  ロックファイルまたはキャッシュエラーが発生しました。対処します..."
@@ -182,9 +181,9 @@ jobs:
         echo "✅ 必要なファイルがすべて揃いました"
         echo "📋 実行コマンド: uv run python main.py --manual --config ../config.ini"
         
-        # 同期実行（エラーハンドリング付き）
+        # シンプル同期実行（削除→追加方式・エラーハンドリング付き）
         if uv run python main.py --manual --config ../config.ini; then
-          echo "✅ スケジュール同期が正常に完了しました"
+          echo "✅ スケジュール同期が正常に完了しました（シンプル同期方式）"
         else
           exit_code=$?
           echo "❌ スケジュール同期でエラーが発生しました (終了コード: $exit_code)"
@@ -207,9 +206,9 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         if [ "${{ job.status }}" = "success" ]; then
-          message="✅ アイカツアカデミー！スケジュール同期が成功しました（uvを使用）"
+          message="✅ アイカツアカデミー！スケジュール同期が成功しました（シンプル同期方式）"
         else
-          message="❌ アイカツアカデミー！スケジュール同期が失敗しました（uvを使用）"
+          message="❌ アイカツアカデミー！スケジュール同期が失敗しました（シンプル同期方式）"
         fi
         
         if [ -n "$SLACK_WEBHOOK_URL" ]; then
