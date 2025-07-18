@@ -102,14 +102,6 @@ class AikatsuScheduleSync:
             # 3. 差分更新による高速同期
             logger.info("差分更新による高速同期を開始...")
             
-            # 🔧 重複バグ防止：初回実行時は強制削除
-            if os.getenv('GITHUB_ACTIONS') == 'true':
-                logger.info("🧹 GitHub Actions環境 - 重複防止のため事前削除を実行")
-                # 日付範囲計算はgcal_manager内で実行
-                start_date, end_date = self.gcal_manager._calculate_date_range(schedule_data)
-                self.gcal_manager.clear_events(start_date, end_date)
-                logger.info("事前削除完了")
-            
             # 差分更新を試行、失敗時はフォールバック処理
             diff_success = self.gcal_manager.sync_events_with_diff(schedule_data)
             
@@ -283,43 +275,51 @@ def create_sample_config() -> None:
         print(f"エラー: 設定ファイルの作成に失敗しました - {e}")
 
 
-def main():
+def parse_arguments():
     """
-    メイン関数 - コマンドライン引数処理と実行制御
-    
-    設計参照: 基本設計書.md 3.4章 実行制御
+    コマンドライン引数の解析
     """
     parser = argparse.ArgumentParser(
         description='アイカツアカデミー！スケジュール同期ツール',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用例:
-  python main.py --manual           手動実行（一度だけ同期）
-  python main.py --auto             自動実行（定期同期）
-  python main.py --create-config    サンプル設定ファイル作成
+  python main.py                    # 自動モード（定期実行）
+  python main.py --manual           # 手動モード（1回実行）
+  python main.py --setup           # セットアップモード
+  python main.py --clear-duplicates # 重複データ削除モード
         """
     )
     
     parser.add_argument('--manual', action='store_true',
-                       help='手動実行モード（一度だけ同期を実行）')
-    parser.add_argument('--auto', action='store_true',
-                       help='自動実行モード（定期的に同期を実行）')
-    parser.add_argument('--create-config', action='store_true',
-                       help='サンプル設定ファイルを作成')
+                       help='手動モード（1回実行）')
+    parser.add_argument('--setup', action='store_true',
+                       help='セットアップモード')
+    parser.add_argument('--clear-duplicates', action='store_true',
+                       help='重複データ削除モード（カレンダーの重複予定を削除）')
     parser.add_argument('--config', default='config.ini',
                        help='設定ファイルのパス（デフォルト: config.ini）')
     
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    """
+    メイン関数 - コマンドライン引数処理と実行制御
+    
+    設計参照: 基本設計書.md 3.4章 実行制御
+    """
+    args = parse_arguments()
     
     # サンプル設定ファイル作成
-    if args.create_config:
+    if args.setup:
         create_sample_config()
         return
     
     # 設定ファイルの存在確認
     if not os.path.exists(args.config):
         print(f"エラー: 設定ファイル '{args.config}' が見つかりません")
-        print("--create-config オプションでサンプルファイルを作成できます")
+        print("--setup オプションでサンプルファイルを作成できます")
         sys.exit(1)
     
     # アプリケーション初期化
@@ -330,13 +330,17 @@ def main():
         # 手動実行
         success = app.run_manual()
         sys.exit(0 if success else 1)
-    elif args.auto:
-        # 自動実行
-        app.run_automatic()
+    elif args.clear_duplicates:
+        # 重複データ削除モード
+        logger.info("重複データ削除モードで開始")
+        if not app.gcal_manager.clear_duplicates():
+            logger.error("重複データの削除に失敗しました")
+            sys.exit(1)
+        logger.info("重複データ削除完了")
+        sys.exit(0)
     else:
-        # 引数なしの場合はヘルプ表示
-        parser.print_help()
-        sys.exit(1)
+        # 自動実行（デフォルト）
+        app.run_automatic()
 
 
 if __name__ == "__main__":

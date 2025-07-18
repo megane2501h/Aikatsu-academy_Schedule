@@ -950,4 +950,81 @@ class GoogleCalendarManager:
             logger.error(f"イベント一覧取得エラー: {e}")
             return []
 
+    def clear_duplicates(self) -> bool:
+        """
+        カレンダーの重複データを削除
+        
+        同一時刻・同一タイトルの重複予定を検出して削除します。
+        7月分の重複問題を解決するために使用します。
+        
+        Returns:
+            bool: 削除成功時True, 失敗時False
+        """
+        if not self.service:
+            logger.error("Google Calendar APIが初期化されていません")
+            return False
+        
+        try:
+            logger.info("=== 重複データ削除開始 ===")
+            
+            # 対象期間を設定（2025年7月全体）
+            start_date = datetime(2025, 7, 1)
+            end_date = datetime(2025, 8, 1) - timedelta(days=1)
+            
+            logger.info(f"削除対象期間: {start_date.date()} ～ {end_date.date()}")
+            
+            # 既存予定を取得
+            existing_events = self._get_existing_events(start_date, end_date)
+            logger.info(f"対象期間の予定数: {len(existing_events)}件")
+            
+            if not existing_events:
+                logger.info("削除対象の予定がありません")
+                return True
+            
+            # 重複検出のためのマッピング
+            event_groups = {}  # key: (start_time, title), value: [event_list]
+            
+            for event in existing_events:
+                # 開始時刻とタイトルで重複を判定
+                start_time = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
+                title = event.get('summary', '')
+                
+                if start_time and title:
+                    key = (start_time, title)
+                    if key not in event_groups:
+                        event_groups[key] = []
+                    event_groups[key].append(event)
+            
+            # 重複データを特定
+            duplicates_to_delete = []
+            duplicate_count = 0
+            
+            for key, events in event_groups.items():
+                if len(events) > 1:
+                    # 最初の1件を残して、残りを削除対象とする
+                    duplicates_to_delete.extend(events[1:])
+                    duplicate_count += len(events) - 1
+                    logger.info(f"重複検出: '{key[1]}' ({key[0]}) - {len(events)}件中{len(events)-1}件削除")
+            
+            if not duplicates_to_delete:
+                logger.info("✅ 重複データが見つかりませんでした")
+                return True
+            
+            logger.info(f"重複削除対象: {len(duplicates_to_delete)}件")
+            
+            # 重複データを削除
+            success = self._delete_events_by_id(duplicates_to_delete)
+            
+            if success:
+                logger.info(f"✅ 重複データ削除完了: {duplicate_count}件削除")
+            else:
+                logger.error("❌ 重複データ削除に失敗しました")
+            
+            logger.info("=== 重複データ削除終了 ===")
+            return success
+            
+        except Exception as e:
+            logger.error(f"重複削除エラー: {e}")
+            return False
+
  
