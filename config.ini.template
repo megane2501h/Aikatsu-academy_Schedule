@@ -2,13 +2,23 @@
 target_url = https://aikatsu-academy.com/schedule/
 
 [GoogleCalendar]
-calendar_id = your_calendar_id@group.calendar.google.com
+# 認証方式: oauth2 (従来方式) または service_account (推奨)
+auth_method = oauth2
+
+# OAuth2認証設定（auth_method = oauth2の場合）
 credentials_file = credentials.json
 token_file = token.json
+
+# サービスアカウント認証設定（auth_method = service_accountの場合）
+service_account_file = service-account.json
+
+# 共通設定
+calendar_id = your-calendar-id@group.calendar.google.com
 
 [Sync]
 update_interval_hours = 6
 
+# ===== 🎨 絵文字設定 =====
 # カテゴリ → 絵文字マッピング（基本）
 [CategoryEmojis]
 short動画 = 📱
@@ -17,8 +27,8 @@ short動画 = 📱
 スペシャル = ✨
 メンバーシップ = 👑
 
-# 人物 → 絵文字マッピング（pタグの内容から判定）
-[PersonEmojis]
+# チャンネル → 絵文字マッピング（[]内の内容から判定・最優先）
+[ChannelEmojis]
 みえる個人配信 = 🩷
 みえる個人ch = 🩷
 メエ個人配信 = 💙
@@ -27,7 +37,8 @@ short動画 = 📱
 パリン個人ch = 💛
 たいむ個人配信 = 💜
 たいむ個人ch = 💜
-
+配信部 = 🏫
+各個人チャンネル = 🩷💙💛💜
 
 # 特別キーワード → 絵文字マッピング（最優先）
 [SpecialKeywords]

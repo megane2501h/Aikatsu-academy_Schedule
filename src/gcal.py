@@ -5,7 +5,8 @@ Google Calendar APIを使用してスケジュール情報を
 カレンダーに同期するためのモジュールです。
 
 主な機能:
-- OAuth2.0認証
+- OAuth2.0認証（個人用・従来方式）
+- サービスアカウント認証（企業用・推奨方式）
 - 既存予定の削除
 - 新規予定の一括登録
 - 差分更新による高速同期
@@ -14,6 +15,7 @@ Google Calendar APIを使用してスケジュール情報を
 import os
 import pickle
 import time
+import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 import configparser
@@ -21,6 +23,7 @@ import logging
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -58,10 +61,20 @@ class GoogleCalendarManager:
         self.config.read(config_path, encoding='utf-8')
         
         self.calendar_id = self.config.get('GoogleCalendar', 'calendar_id')
+        
+        # 認証方式の設定（デフォルトはOAuth2）
+        self.auth_method = self.config.get('GoogleCalendar', 'auth_method', fallback='oauth2')
+        
+        # OAuth2認証設定
         self.credentials_file = self.config.get('GoogleCalendar', 'credentials_file', 
                                                fallback='credentials.json')
         self.token_file = self.config.get('GoogleCalendar', 'token_file', 
                                          fallback='token.json')
+        
+        # サービスアカウント認証設定
+        self.service_account_file = self.config.get('GoogleCalendar', 'service_account_file',
+                                                   fallback='service-account.json')
+        
         self.service = None
     
     def _calculate_date_range(self, events_data: List[Dict[str, Any]]) -> Tuple[datetime, datetime]:
@@ -114,6 +127,65 @@ class GoogleCalendarManager:
             bool: 認証成功時True, 失敗時False
         """
         try:
+            # 認証方式によって処理を分岐
+            if self.auth_method == 'service_account':
+                return self._authenticate_service_account()
+            else:
+                return self._authenticate_oauth2()
+                
+        except Exception as e:
+            logger.error(f"認証エラー: {e}")
+            return False
+    
+    def _authenticate_service_account(self) -> bool:
+        """
+        サービスアカウント認証を実行
+        
+        Returns:
+            bool: 認証成功時True, 失敗時False
+        """
+        try:
+            logger.info("サービスアカウント認証を開始...")
+            
+            # サービスアカウントファイルの確認
+            if not os.path.exists(self.service_account_file):
+                logger.error(f"サービスアカウントファイルが見つかりません: {self.service_account_file}")
+                logger.error("🔧 解決方法:")
+                logger.error("  1. Google Cloud Consoleでサービスアカウントを作成")
+                logger.error("  2. JSONキーファイルをダウンロード")
+                logger.error("  3. ファイルを正しいパスに配置")
+                logger.error("  4. 詳細: docs/SERVICE_ACCOUNT_SETUP.md を参照")
+                return False
+            
+            # サービスアカウント認証情報の読み込み
+            try:
+                creds = service_account.Credentials.from_service_account_file(
+                    self.service_account_file, scopes=SCOPES)
+                logger.info("サービスアカウント認証情報を正常に読み込みました")
+            except Exception as e:
+                logger.error(f"サービスアカウントファイルの読み込みエラー: {e}")
+                logger.error("🔧 ファイル内容を確認してください:")
+                logger.error("  - 有効なJSON形式か")
+                logger.error("  - 正しいサービスアカウントキーか")
+                return False
+            
+            # Google Calendar APIサービス構築
+            self.service = build('calendar', 'v3', credentials=creds)
+            logger.info("サービスアカウント認証完了 - Google Calendar API接続成功")
+            return True
+            
+        except Exception as e:
+            logger.error(f"サービスアカウント認証エラー: {e}")
+            return False
+    
+    def _authenticate_oauth2(self) -> bool:
+        """
+        OAuth2認証を実行（従来方式）
+        
+        Returns:
+            bool: 認証成功時True, 失敗時False
+        """
+        try:
             creds = None
             
             # 既存のトークンファイル確認
@@ -127,13 +199,28 @@ class GoogleCalendarManager:
             # トークンが無効または存在しない場合
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
-                    # トークンのリフレッシュ
+                    # トークンのリフレッシュ（改善版・リトライ機能付き）
                     logger.info("アクセストークンをリフレッシュ中...")
-                    try:
-                        creds.refresh(Request())
-                        logger.info("トークンリフレッシュ成功")
-                    except Exception as e:
-                        logger.error(f"トークンリフレッシュ失敗: {e}")
+                    refresh_success = False
+                    
+                    # リフレッシュのリトライ（最大3回）
+                    for attempt in range(1, 4):
+                        try:
+                            creds.refresh(Request())
+                            logger.info(f"トークンリフレッシュ成功 (試行回数: {attempt})")
+                            refresh_success = True
+                            break
+                        except Exception as e:
+                            logger.warning(f"トークンリフレッシュ試行{attempt}失敗: {e}")
+                            if attempt < 3:
+                                import time
+                                wait_time = attempt * 2  # 2秒、4秒の間隔でリトライ
+                                logger.info(f"{wait_time}秒後にリトライします...")
+                                time.sleep(wait_time)
+                            else:
+                                logger.error(f"トークンリフレッシュ完全失敗: {e}")
+                    
+                    if not refresh_success:
                         logger.info("新しいトークンが必要です")
                         creds = None
                 
