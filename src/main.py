@@ -85,13 +85,13 @@ class AikatsuScheduleSync:
             if not self.gcal_manager.authenticate():
                 logger.error("Google Calendar API認証に失敗しました")
                 logger.error("🔧 解決方法:")
-                logger.error("  1. トークンの有効期限が切れている可能性があります")
-                logger.error("  2. GitHub Actionsのsecretsを更新してください:")
-                logger.error("     - GOOGLE_CREDENTIALS: OAuth2.0認証情報")
-                logger.error("     - GOOGLE_TOKEN: アクセストークン")
-                logger.error("     - CALENDAR_ID: カレンダーID")
-                logger.error("  3. ローカルで認証し直してトークンを更新してください")
-                logger.error("  4. utils/scrape_only.py でスクレーピングのみテストできます")
+                logger.error("  1. 最も可能性の高い原因: トークンの有効期限切れ")
+                logger.error("  2. ローカルで新しいトークンを生成:")
+                logger.error("     python src/main.py --manual --config ../config.ini")
+                logger.error("  3. 生成されたtoken.jsonの内容をGitHubのsecretsに設定:")
+                logger.error("     Repository Settings > Secrets > GOOGLE_TOKEN を更新")
+                logger.error("  4. 必要に応じてGOOGLE_CREDENTIALSとCALENDAR_IDも確認")
+                logger.error("  5. スクレーピング機能のテスト: python utils/scrape_only.py")
                 return False
             
             # 2. スケジュール取得

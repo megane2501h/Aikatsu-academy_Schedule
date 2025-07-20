@@ -187,16 +187,35 @@ jobs:
         else
           exit_code=$?
           echo "❌ スケジュール同期でエラーが発生しました (終了コード: $exit_code)"
-          echo "🔧 トラブルシューティング:"
-          echo "  1. Google Calendar API認証エラーの場合:"
-          echo "     - GOOGLE_CREDENTIALS secretが正しく設定されているか確認"
-          echo "     - GOOGLE_TOKEN secretが有効期限内か確認"
-          echo "     - CALENDAR_ID secretが正しいカレンダーIDか確認"
-          echo "  2. スケジュール取得エラーの場合:"
-          echo "     - 公式サイトのアクセス制限やレート制限の可能性"
-          echo "     - サイト構造の変更の可能性"
-          echo "  3. その他のエラーの場合:"
-          echo "     - ログの詳細を確認してください"
+          echo "🔧 詳細なトラブルシューティング:"
+          echo "  1. 最も可能性の高い原因: Google認証トークンの期限切れ"
+          echo "     解決手順:"
+          echo "     a) ローカル環境で新しいトークンを生成:"
+          echo "        python src/main.py --manual --config ../config.ini"
+          echo "     b) 生成されたtoken.jsonの内容をコピー"
+          echo "     c) GitHub > Repository Settings > Secrets and variables > Actions"
+          echo "     d) GOOGLE_TOKEN secretを新しい内容で更新"
+          echo "     e) 必要に応じてGOOGLE_CREDENTIALSも確認"
+          echo ""
+          echo "  2. スクレーピング機能の確認（フォールバック確認）:"
+          echo "     python utils/scrape_only.py"
+          echo ""
+          echo "  3. その他の可能性:"
+          echo "     - 公式サイトの構造変更やアクセス制限"
+          echo "     - ネットワーク接続の問題"
+          echo "     - CALENDAR_ID secretの設定ミス"
+          echo ""
+          echo "  📝 次回の認証エラーを防ぐため、定期的にトークンを更新してください"
+          
+          # スクレーピングのみのテスト実行（フォールバック）
+          echo ""
+          echo "🔍 スクレーピング機能の確認を実行します..."
+          if python ../utils/scrape_only.py; then
+            echo "✅ スクレーピング機能は正常です - 問題は認証のみ"
+          else
+            echo "❌ スクレーピング機能にも問題があります"
+          fi
+          
           exit $exit_code
         fi
     

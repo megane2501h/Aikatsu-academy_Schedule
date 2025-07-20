@@ -147,10 +147,26 @@ class GoogleCalendarManager:
                         logger.error("GitHub Actions環境でトークンが無効です")
                         logger.error("🔧 トークンの問題が発生しました:")
                         logger.error("  1. GOOGLE_TOKEN secretの有効期限が切れている可能性があります")
-                        logger.error("  2. ローカルで認証し直してトークンを更新してください:")
+                        logger.error("  2. ローカルで新しいトークンを生成してください:")
+                        logger.error("     cd /path/to/your/project")
                         logger.error("     python src/main.py --manual")
-                        logger.error("  3. 生成されたtoken.jsonの内容をGITHUB_TOKENに設定")
-                        logger.error("  4. GOOGLE_CREDENTIALSも最新のものに更新")
+                        logger.error("  3. 生成されたtoken.jsonの内容をGitHubのsecretsに設定:")
+                        logger.error("     - Repository Settings > Secrets and variables > Actions")
+                        logger.error("     - GOOGLE_TOKEN secretを新しいtoken.jsonの内容で更新")
+                        logger.error("  4. 必要に応じてGOOGLE_CREDENTIALSも最新版に更新")
+                        logger.error("  5. スクレーピング機能の確認は utils/scrape_only.py で可能です")
+                        
+                        # トークン状態の詳細情報
+                        if creds:
+                            if creds.expired:
+                                logger.error(f"  🚨 トークン状態: 期限切れ (有効期限: {creds.expiry})")
+                            else:
+                                logger.error("  🚨 トークン状態: 無効または破損")
+                            if not creds.refresh_token:
+                                logger.error("  🚨 リフレッシュトークンが利用できません")
+                        else:
+                            logger.error("  🚨 トークン状態: 読み込み不可または存在しません")
+                        
                         return False
                     else:
                         # ローカル環境では対話的認証を実行
