@@ -205,12 +205,12 @@ class GoogleCalendarManager:
                     
                     # リフレッシュのリトライ（最大3回）
                     for attempt in range(1, 4):
-                        try:
-                            creds.refresh(Request())
+                    try:
+                        creds.refresh(Request())
                             logger.info(f"トークンリフレッシュ成功 (試行回数: {attempt})")
                             refresh_success = True
                             break
-                        except Exception as e:
+                    except Exception as e:
                             logger.warning(f"トークンリフレッシュ試行{attempt}失敗: {e}")
                             if attempt < 3:
                                 import time
