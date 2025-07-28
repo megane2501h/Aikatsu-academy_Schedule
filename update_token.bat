@@ -1,105 +1,102 @@
 @echo off
 chcp 65001 >nul
-setlocal enabledelayedexpansion
 
 echo.
 echo ========================================
-echo  Google Calendar API ãƒˆãƒ¼ã‚¯ãƒ³æ›´æ–°ãƒ„ãƒ¼ãƒ«
+echo  Google Calendar API ƒg[ƒNƒ“XVƒc[ƒ‹
 echo ========================================
 echo.
 
-:: ç¾åœ¨ã®ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’ç¢ºèª
-echo ðŸ“ ç¾åœ¨ã®ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒª: %CD%
+:: Œ»Ý‚ÌƒfƒBƒŒƒNƒgƒŠ‚ðŠm”F
+echo Œ»Ý‚ÌƒfƒBƒŒƒNƒgƒŠ: %CD%
 echo.
 
-:: è¨­å®šãƒ•ã‚¡ã‚¤ãƒ«ã®å­˜åœ¨ç¢ºèª
+:: Ý’èƒtƒ@ƒCƒ‹‚Ì‘¶ÝŠm”F
 if not exist "config.ini" (
-    echo âŒ config.ini ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“
-    echo ðŸ“ ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆã®ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã§å®Ÿè¡Œã—ã¦ãã ã•ã„
+    echo ERROR: config.ini ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ
+    echo ƒvƒƒWƒFƒNƒg‚Ìƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚ÅŽÀs‚µ‚Ä‚­‚¾‚³‚¢
     pause
     exit /b 1
 )
 
-echo âœ… è¨­å®šãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç¢ºèªã—ã¾ã—ãŸ: config.ini
+echo Ý’èƒtƒ@ƒCƒ‹‚ðŠm”F‚µ‚Ü‚µ‚½: config.ini
 echo.
 
-:: æ—¢å­˜ã®ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ã®ç¢ºèª
+:: Šù‘¶‚Ìƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚ÌŠm”F
 if exist "token.json" (
-    echo ðŸ“„ æ—¢å­˜ã®ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç¢ºèªã—ã¾ã—ãŸ
-    echo ðŸ“Š ãƒ•ã‚¡ã‚¤ãƒ«ã‚µã‚¤ã‚º: 
-    for %%A in (token.json) do echo   %%~zA bytes
+    echo Šù‘¶‚Ìƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚ðŠm”F‚µ‚Ü‚µ‚½
+    for %%A in (token.json) do echo ƒtƒ@ƒCƒ‹ƒTƒCƒY: %%~zA bytes
     echo.
 ) else (
-    echo â„¹ï¸  æ—¢å­˜ã®ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ã¯è¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã§ã—ãŸï¼ˆåˆå›žå®Ÿè¡Œï¼‰
+    echo Šù‘¶‚Ìƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚ÍŒ©‚Â‚©‚è‚Ü‚¹‚ñ‚Å‚µ‚½i‰‰ñŽÀsj
     echo.
 )
 
-:: ãƒˆãƒ¼ã‚¯ãƒ³æ›´æ–°ã®å®Ÿè¡Œ
-echo ðŸ”„ Google Calendar API ãƒˆãƒ¼ã‚¯ãƒ³ã‚’æ›´æ–°ä¸­...
-echo ðŸ“‹ å®Ÿè¡Œã‚³ãƒžãƒ³ãƒ‰: python src/main.py --manual --config config.ini
+:: ƒg[ƒNƒ“XV‚ÌŽÀs
+echo Google Calendar API ƒg[ƒNƒ“‚ðXV’†...
+echo ŽÀsƒRƒ}ƒ“ƒh: python src/main.py --manual --config config.ini
 echo.
 
 python src/main.py --manual --config config.ini
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo âŒ ãƒˆãƒ¼ã‚¯ãƒ³æ›´æ–°ã«å¤±æ•—ã—ã¾ã—ãŸ
-    echo ðŸ”§ ãƒˆãƒ©ãƒ–ãƒ«ã‚·ãƒ¥ãƒ¼ãƒ†ã‚£ãƒ³ã‚°:
-    echo   1. ã‚¤ãƒ³ã‚¿ãƒ¼ãƒãƒƒãƒˆæŽ¥ç¶šã‚’ç¢ºèª
-    echo   2. Googleã‚¢ã‚«ã‚¦ãƒ³ãƒˆã®èªè¨¼ã‚’ç¢ºèª
-    echo   3. config.ini ã®è¨­å®šã‚’ç¢ºèª
+    echo ƒg[ƒNƒ“XV‚ÉŽ¸”s‚µ‚Ü‚µ‚½
+    echo ƒgƒ‰ƒuƒ‹ƒVƒ…[ƒeƒBƒ“ƒO:
+    echo   1. ƒCƒ“ƒ^[ƒlƒbƒgÚ‘±‚ðŠm”F
+    echo   2. GoogleƒAƒJƒEƒ“ƒg‚Ì”FØ‚ðŠm”F
+    echo   3. config.ini ‚ÌÝ’è‚ðŠm”F
     echo.
     pause
     exit /b 1
 )
 
 echo.
-echo âœ… ãƒˆãƒ¼ã‚¯ãƒ³æ›´æ–°ãŒå®Œäº†ã—ã¾ã—ãŸ
+echo ƒg[ƒNƒ“XV‚ªŠ®—¹‚µ‚Ü‚µ‚½
 echo.
 
-:: æ–°ã—ã„ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ã®ç¢ºèª
+:: V‚µ‚¢ƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚ÌŠm”F
 if not exist "token.json" (
-    echo âŒ æ–°ã—ã„ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ãŒç”Ÿæˆã•ã‚Œã¾ã›ã‚“ã§ã—ãŸ
+    echo V‚µ‚¢ƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚ª¶¬‚³‚ê‚Ü‚¹‚ñ‚Å‚µ‚½
     pause
     exit /b 1
 )
 
-echo ðŸ“„ æ–°ã—ã„ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç¢ºèªã—ã¾ã—ãŸ
-echo ðŸ“Š ãƒ•ã‚¡ã‚¤ãƒ«ã‚µã‚¤ã‚º:
-for %%A in (token.json) do echo   %%~zA bytes
+echo V‚µ‚¢ƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚ðŠm”F‚µ‚Ü‚µ‚½
+for %%A in (token.json) do echo ƒtƒ@ƒCƒ‹ƒTƒCƒY: %%~zA bytes
 echo.
 
-:: ãƒˆãƒ¼ã‚¯ãƒ³å†…å®¹ã®è¡¨ç¤ºï¼ˆæ©Ÿå¯†æƒ…å ±ã¯é™¤å¤–ï¼‰
-echo ðŸ” ãƒˆãƒ¼ã‚¯ãƒ³æƒ…å ±ï¼ˆãƒ‡ãƒãƒƒã‚°ç”¨ï¼‰:
-python -c "import json; data=json.load(open('token.json')); print('  æœ‰åŠ¹æœŸé™:', data.get('expiry', 'ä¸æ˜Ž')); print('  ã‚¹ã‚³ãƒ¼ãƒ—:', len(data.get('scopes', [])), 'å€‹'); print('  ãƒªãƒ•ãƒ¬ãƒƒã‚·ãƒ¥ãƒˆãƒ¼ã‚¯ãƒ³:', 'ã‚ã‚Š' if data.get('refresh_token') else 'ãªã—')"
+:: ƒg[ƒNƒ““à—e‚Ì•\Ž¦i‹@–§î•ñ‚ÍœŠOj
+echo ƒg[ƒNƒ“î•ñiƒfƒoƒbƒO—pj:
+python -c "import json; data=json.load(open('token.json')); print('—LŒøŠúŒÀ:', data.get('expiry', '•s–¾')); print('ƒXƒR[ƒv:', len(data.get('scopes', [])), 'ŒÂ'); print('ƒŠƒtƒŒƒbƒVƒ…ƒg[ƒNƒ“:', '‚ ‚è' if data.get('refresh_token') else '‚È‚µ')"
 echo.
 
-:: GitHub Secretsæ›´æ–°ã®ã‚¬ã‚¤ãƒ€ãƒ³ã‚¹
+:: GitHub SecretsXV‚ÌƒKƒCƒ_ƒ“ƒX
 echo ========================================
-echo  GitHub Secrets æ›´æ–°æ‰‹é †
+echo  GitHub Secrets XVŽè‡
 echo ========================================
 echo.
-echo ðŸ“‹ ä»¥ä¸‹ã®æ‰‹é †ã§GitHub Secretsã‚’æ›´æ–°ã—ã¦ãã ã•ã„:
+echo ˆÈ‰º‚ÌŽè‡‚ÅGitHub Secrets‚ðXV‚µ‚Ä‚­‚¾‚³‚¢:
 echo.
-echo 1ï¸âƒ£ GitHubãƒªãƒã‚¸ãƒˆãƒªãƒšãƒ¼ã‚¸ã«ã‚¢ã‚¯ã‚»ã‚¹
+echo 1. GitHubƒŠƒ|ƒWƒgƒŠƒy[ƒW‚ÉƒAƒNƒZƒX
 echo    https://github.com/megane2501h/Aikatsu-academy_Schedule
 echo.
-echo 2ï¸âƒ£ Settings > Secrets and variables > Actions
+echo 2. Settings > Secrets and variables > Actions
 echo.
-echo 3ï¸âƒ£ GOOGLE_TOKEN ã‚’é¸æŠžã—ã¦ã€ŒUpdateã€ã‚’ã‚¯ãƒªãƒƒã‚¯
+echo 3. GOOGLE_TOKEN ‚ð‘I‘ð‚µ‚ÄuUpdatev‚ðƒNƒŠƒbƒN
 echo.
-echo 4ï¸âƒ£ ä»¥ä¸‹ã®å†…å®¹ã‚’ã‚³ãƒ”ãƒ¼ã—ã¦è²¼ã‚Šä»˜ã‘:
+echo 4. ˆÈ‰º‚Ì“à—e‚ðƒRƒs[‚µ‚Ä“\‚è•t‚¯:
 echo.
 
-:: ãƒˆãƒ¼ã‚¯ãƒ³ãƒ•ã‚¡ã‚¤ãƒ«ã®å†…å®¹ã‚’è¡¨ç¤º
-echo ðŸ“‹ æ–°ã—ã„ãƒˆãƒ¼ã‚¯ãƒ³å†…å®¹ï¼ˆã“ã‚Œã‚’ã‚³ãƒ”ãƒ¼ã—ã¦ãã ã•ã„ï¼‰:
+:: ƒg[ƒNƒ“ƒtƒ@ƒCƒ‹‚Ì“à—e‚ð•\Ž¦
+echo V‚µ‚¢ƒg[ƒNƒ““à—ei‚±‚ê‚ðƒRƒs[‚µ‚Ä‚­‚¾‚³‚¢j:
 echo ----------------------------------------
 type token.json
 echo ----------------------------------------
 echo.
 
-:: è‡ªå‹•ã‚³ãƒ”ãƒ¼æ©Ÿèƒ½ï¼ˆWindows 10ä»¥é™ï¼‰
-echo ðŸ¤– è‡ªå‹•ã‚³ãƒ”ãƒ¼æ©Ÿèƒ½ã‚’è©¦è¡Œä¸­...
+:: Ž©“®ƒRƒs[‹@”\iWindows 10ˆÈ~j
+echo Ž©“®ƒRƒs[‹@”\‚ðŽŽs’†...
 python -c "
 import json
 import subprocess
@@ -107,27 +104,27 @@ try:
     with open('token.json', 'r', encoding='utf-8') as f:
         token_content = f.read()
     subprocess.run(['clip'], input=token_content.encode('utf-8'), check=True)
-    print('âœ… ãƒˆãƒ¼ã‚¯ãƒ³å†…å®¹ã‚’ã‚¯ãƒªãƒƒãƒ—ãƒœãƒ¼ãƒ‰ã«ã‚³ãƒ”ãƒ¼ã—ã¾ã—ãŸ')
-    print('ðŸ“‹ ç›´æŽ¥GitHub Secretsã«è²¼ã‚Šä»˜ã‘ã¦ãã ã•ã„')
+    print('ƒg[ƒNƒ““à—e‚ðƒNƒŠƒbƒvƒ{[ƒh‚ÉƒRƒs[‚µ‚Ü‚µ‚½')
+    print('’¼ÚGitHub Secrets‚É“\‚è•t‚¯‚Ä‚­‚¾‚³‚¢')
 except Exception as e:
-    print('âš ï¸  è‡ªå‹•ã‚³ãƒ”ãƒ¼ã«å¤±æ•—ã—ã¾ã—ãŸ')
-    print('ðŸ“‹ ä¸Šè¨˜ã®å†…å®¹ã‚’æ‰‹å‹•ã§ã‚³ãƒ”ãƒ¼ã—ã¦ãã ã•ã„')
+    print('Ž©“®ƒRƒs[‚ÉŽ¸”s‚µ‚Ü‚µ‚½')
+    print('ã‹L‚Ì“à—e‚ðŽè“®‚ÅƒRƒs[‚µ‚Ä‚­‚¾‚³‚¢')
 "
 echo.
 
-:: å®Œäº†ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸
+:: Š®—¹ƒƒbƒZ[ƒW
 echo ========================================
-echo  âœ… ãƒˆãƒ¼ã‚¯ãƒ³æ›´æ–°å®Œäº†
+echo  ƒg[ƒNƒ“XVŠ®—¹
 echo ========================================
 echo.
-echo ðŸŽ¯ æ¬¡ã®ã‚¹ãƒ†ãƒƒãƒ—:
-echo   1. ä¸Šè¨˜ã®ãƒˆãƒ¼ã‚¯ãƒ³å†…å®¹ã‚’GitHub Secretsã«è¨­å®š
-echo   2. GitHub Actionsã§åŒæœŸãƒ†ã‚¹ãƒˆã‚’å®Ÿè¡Œ
-echo   3. å•é¡ŒãŒè§£æ±ºã—ãŸã“ã¨ã‚’ç¢ºèª
+echo ŽŸ‚ÌƒXƒeƒbƒv:
+echo   1. ã‹L‚Ìƒg[ƒNƒ““à—e‚ðGitHub Secrets‚ÉÝ’è
+echo   2. GitHub Actions‚Å“¯ŠúƒeƒXƒg‚ðŽÀs
+echo   3. –â‘è‚ª‰ðŒˆ‚µ‚½‚±‚Æ‚ðŠm”F
 echo.
-echo ðŸ’¡ ãƒ’ãƒ³ãƒˆ:
-echo   - ã‚µãƒ¼ãƒ“ã‚¹ã‚¢ã‚«ã‚¦ãƒ³ãƒˆèªè¨¼ã¸ã®ç§»è¡Œã‚‚æ¤œè¨Žã—ã¦ãã ã•ã„
-echo   - docs/SERVICE_ACCOUNT_SETUP.md ã‚’å‚ç…§
+echo ƒqƒ“ƒg:
+echo   - ƒT[ƒrƒXƒAƒJƒEƒ“ƒg”FØ‚Ö‚ÌˆÚs‚àŒŸ“¢‚µ‚Ä‚­‚¾‚³‚¢
+echo   - docs/SERVICE_ACCOUNT_SETUP.md ‚ðŽQÆ
 echo.
 
 pause 
